@@ -42,3 +42,17 @@ git fetch template && git checkout template/v2 .github
 - **Clean Architecture**
 - **Hexagonal Architecture**
 - **Layered Architecture**
+
+## URL
+http://localhost:8080
+http://localhost:8080/update/test/name/2
+http://localhost:8080/update/test/name
+http://localhost:8080/update/test
+http://localhost:8080/update
+
+## Запуск с параметрами по умолчанию
+go run cmd/server/main.go
+
+## Для отладки - тестовый запрос через curl
+curl -X POST -H "Content-Type: text/plain" "http://localhost:8080/update/gauge/TestMetric/123.456"
+curl -X POST -H "Content-Type: text/plain" -w '%{http_code}\n' "http://localhost:8080/update/gauge/TestMetric/123.456"
