@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-	// Инициализация компонентов
 	metricsStorage := storage.NewMemStorage()
 	handlers := handler.NewHandlers(metricsStorage)
 
