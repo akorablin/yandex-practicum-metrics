@@ -38,12 +38,6 @@ func (h *Handlers) updateHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Проверяем заголовок "Content-Type"
-	if req.Header.Get("Content-Type") != "text/plain" {
-		http.Error(res, "\"Content-Type\" header error!", http.StatusBadRequest)
-		return
-	}
-
 	// Разбиваем URL на части
 	path := strings.TrimPrefix(req.URL.Path, "/update/")
 	parts := strings.Split(path, "/")
