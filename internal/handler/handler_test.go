@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,15 +18,13 @@ func TestUpdateHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		storage storage.Storage
-		url     string
-		want    want
+		name string
+		url  string
+		want want
 	}{
 		{
-			name:    "Positive gauge test #1",
-			storage: storage.NewMemStorage(),
-			url:     "/update/gauge/TestMetric/123.456",
+			name: "Positive gauge test #1",
+			url:  "/update/gauge/TestMetric/123.456",
 			want: want{
 				code:        200,
 				response:    `Ok`,
@@ -35,9 +32,8 @@ func TestUpdateHandler(t *testing.T) {
 			},
 		},
 		{
-			name:    "Positive counter test #1",
-			storage: storage.NewMemStorage(),
-			url:     "/update/counter/TestMetric/123",
+			name: "Positive counter test #1",
+			url:  "/update/counter/TestMetric/123",
 			want: want{
 				code:        200,
 				response:    `Ok`,
@@ -45,9 +41,8 @@ func TestUpdateHandler(t *testing.T) {
 			},
 		},
 		{
-			name:    "Empty gauge test #2",
-			storage: storage.NewMemStorage(),
-			url:     "/update/gauge/TestMetric",
+			name: "Empty gauge test #2",
+			url:  "/update/gauge/TestMetric",
 			want: want{
 				code:        404,
 				response:    `Ok`,
@@ -55,9 +50,8 @@ func TestUpdateHandler(t *testing.T) {
 			},
 		},
 		{
-			name:    "Negative counter test #2",
-			storage: storage.NewMemStorage(),
-			url:     "/update/counter/TestMetric/123.123",
+			name: "Negative counter test #2",
+			url:  "/update/counter/TestMetric/123.123",
 			want: want{
 				code:        400,
 				response:    `Ok`,
@@ -71,8 +65,8 @@ func TestUpdateHandler(t *testing.T) {
 			request.Header.Set("Content-Type", "text/plain")
 			w := httptest.NewRecorder()
 
-			h := NewHandlers(test.storage)
-			h.UpdateHandler(w, request)
+			h := NewHandlers()
+			h.updateHandler(w, request)
 
 			res := w.Result()
 			defer res.Body.Close()
