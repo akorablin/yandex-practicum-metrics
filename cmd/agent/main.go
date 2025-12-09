@@ -17,8 +17,8 @@ type AgentConfig struct {
 
 // Константы по умолчанию согласно требованиям
 const (
-	defaultServerAddress  = "localhost:8080"
-	defaultPollInterval   = 2 * time.Second  // Обновление метрик каждые 2 секунды
+	defaultServerAddress = "localhost:8080"
+	// defaultPollInterval   = 2 * time.Second  // Обновление метрик каждые 2 секунды
 	defaultReportInterval = 10 * time.Second // Отправка метрик каждые 10 секунд
 )
 
@@ -27,7 +27,6 @@ func main() {
 
 	// Инициализируем конфиг
 	config.ServerAddress = defaultServerAddress
-	config.ReportInterval = defaultPollInterval
 	config.PollInterval = defaultReportInterval
 
 	// Создаем компоненты
