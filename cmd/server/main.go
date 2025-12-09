@@ -39,7 +39,7 @@ func updateHandler(res http.ResponseWriter, req *http.Request) {
 	// Проверяем URL
 	if len(parts) != 3 {
 		if parts[0] == "gauge" || parts[0] == "counter" {
-			http.Error(res, "Invalid URL formatfor type", http.StatusNotFound)
+			http.Error(res, "Invalid URL format for type", http.StatusNotFound)
 		} else {
 			http.Error(res, "Invalid URL format. Expected: /update/{type}/{name}/{value}", http.StatusBadRequest)
 		}
