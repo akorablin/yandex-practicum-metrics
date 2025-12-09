@@ -38,11 +38,11 @@ func updateHandler(res http.ResponseWriter, req *http.Request) {
 
 	// Проверяем URL
 	if len(parts) != 3 {
-		//invalidUrlTextError := "Invalid URL format. Expected: /update/{type}/{name}/{value}"
+		var invalidUrlError string = "Invalid URL format. Expected: /update/{type}/{name}/{value}"
 		if parts[0] == "gauge" || parts[0] == "counter" {
-			http.Error(res, "Invalid URL format", http.StatusNotFound)
+			http.Error(res, invalidUrlError, http.StatusNotFound)
 		} else {
-			http.Error(res, "Invalid URL format", http.StatusBadRequest)
+			http.Error(res, invalidUrlError, http.StatusBadRequest)
 		}
 		return
 	}
