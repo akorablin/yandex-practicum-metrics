@@ -1,3 +1,3 @@
 module github.com/akorablin/yandex-practicum-metrics
 
-go 1.25.4
+go 1.24.11
