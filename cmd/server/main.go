@@ -22,7 +22,12 @@ func main() {
 func run() error {
 	config, err := parseFlags()
 	if err != nil {
-		return fmt.Errorf("parsing flags: %w", err)
+		return fmt.Errorf("error parsing flags: %w", err)
+	}
+
+	config, err = applyEnv(config)
+	if err != nil {
+		return fmt.Errorf("error apply env: %w", err)
 	}
 
 	fmt.Println("Running server on", config.Address)
@@ -43,6 +48,15 @@ func parseFlags() (*ServerConfig, error) {
 		fmt.Fprintf(os.Stderr, "Usage options:\n")
 		flag.PrintDefaults()
 		return nil, fmt.Errorf("unknown arguments provided")
+	}
+
+	return config, nil
+}
+
+func applyEnv(config *ServerConfig) (*ServerConfig, error) {
+	// Переменная окружения ADDRESS
+	if addr := os.Getenv("ADDRESS"); addr != "" {
+		config.Address = addr
 	}
 
 	return config, nil
