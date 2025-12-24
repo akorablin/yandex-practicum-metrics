@@ -7,10 +7,13 @@ import (
 	"os"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
+	"github.com/akorablin/yandex-practicum-metrics/internal/logger"
+	"go.uber.org/zap"
 )
 
 type ServerConfig struct {
-	Address string
+	Address  string
+	LogLevel string
 }
 
 func main() {
@@ -20,19 +23,27 @@ func main() {
 }
 
 func run() error {
+	// Флаги командной строки
 	config, err := parseFlags()
 	if err != nil {
 		return fmt.Errorf("error parsing flags: %w", err)
 	}
 
+	// Флаги из переменных окружения
 	config, err = applyEnv(config)
 	if err != nil {
 		return fmt.Errorf("error apply env: %w", err)
 	}
 
-	fmt.Println("Running server on", config.Address)
+	// Логирование
+	if err := logger.Initialize(config.LogLevel); err != nil {
+		return err
+	}
+
+	logger.Log.Info("Running server", zap.String("address", config.Address))
+
 	handlers := handler.NewHandlers()
-	return http.ListenAndServe(config.Address, handlers.GetRoutes())
+	return http.ListenAndServe(config.Address, logger.WithLogging(handlers.GetRoutes()))
 }
 
 func parseFlags() (*ServerConfig, error) {
@@ -40,6 +51,7 @@ func parseFlags() (*ServerConfig, error) {
 
 	// Работа с командной строкой
 	flag.StringVar(&config.Address, "a", "localhost:8080", "HTTP server endpoint address")
+	flag.StringVar(&config.LogLevel, "l", "info", "Log level")
 	flag.Parse()
 
 	// Валидация
