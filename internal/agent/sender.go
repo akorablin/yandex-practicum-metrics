@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 )
@@ -50,6 +51,37 @@ func (s *Sender) SendAllMetrics(gauge map[string]float64, counter map[string]int
 }
 
 func (s *Sender) SendGauge(name string, value float64) error {
+	url := fmt.Sprintf("%s/update/gauge/%s/%s", s.baseURL, name, strconv.FormatFloat(value, 'f', -1, 64))
+	return s.sendMetric(url, "gauge", name)
+}
+
+func (s *Sender) SendCounter(name string, value int64) error {
+	url := fmt.Sprintf("%s/update/counter/%s/%d", s.baseURL, name, value)
+	return s.sendMetric(url, "counter", name)
+}
+
+func (s *Sender) sendMetric(url, metricType, metricName string) error {
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "text/plain")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d for %s %s", resp.StatusCode, metricType, metricName)
+	}
+
+	// log.Printf("Sent %s metric: %s", metricType, metricName)
+	return nil
+}
+
+func (s *Sender) SendGaugeJson(name string, value float64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
 	data := models.Metrics{
@@ -62,10 +94,10 @@ func (s *Sender) SendGauge(name string, value float64) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetric(url, jsonData)
+	return s.sendMetricJson(url, jsonData)
 }
 
-func (s *Sender) SendCounter(name string, value int64) error {
+func (s *Sender) SendCounterJson(name string, value int64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
 	data := models.Metrics{
@@ -78,10 +110,10 @@ func (s *Sender) SendCounter(name string, value int64) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetric(url, jsonData)
+	return s.sendMetricJson(url, jsonData)
 }
 
-func (s *Sender) sendMetric(url string, data []byte) error {
+func (s *Sender) sendMetricJson(url string, data []byte) error {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
