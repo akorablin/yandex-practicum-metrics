@@ -27,10 +27,10 @@ func NewHandlers() *Handlers {
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
-	r.Post("/update/", h.updateMetricJSONHandler)
-	r.Post("/value/", h.valueMetricJSONHandler)
-	r.Post("/update/*", h.updateHandler)
+	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
+	r.Post("/update", h.updateMetricJSONHandler)
+	r.Post("/value", h.valueMetricJSONHandler)
 	r.Get("/", h.rootHandler)
 
 	return r
