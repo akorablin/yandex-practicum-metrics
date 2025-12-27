@@ -1,14 +1,17 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
+	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/go-chi/chi"
 )
@@ -24,6 +27,8 @@ func NewHandlers() *Handlers {
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
+	r.Post("/update", h.updateMetricJSONHandler)
+	r.Post("/value", h.valueMetricJSONHandler)
 	r.Post("/update/*", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
 	r.Get("/", h.rootHandler)
@@ -226,4 +231,99 @@ func (h *Handlers) rootHandler(res http.ResponseWriter, req *http.Request) {
 	if err := t.Execute(res, data); err != nil {
 		log.Printf("Template execution error: %v", err)
 	}
+}
+
+func (h *Handlers) updateMetricJSONHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(res, "Content-Type must be application/json", http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(res, "cannot read body", http.StatusInternalServerError)
+		return
+	}
+	defer req.Body.Close()
+
+	var m models.Metrics
+	if err := json.Unmarshal(body, &m); err != nil {
+		http.Error(res, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if m.ID == "" || (m.MType != "gauge" && m.MType != "counter") {
+		http.Error(res, "invalid metric id or type", http.StatusBadRequest)
+		return
+	}
+
+	switch m.MType {
+	case "gauge":
+		if m.Value == nil {
+			http.Error(res, "missing value for gauge", http.StatusBadRequest)
+			return
+		}
+		h.storage.UpdateGauge(m.ID, *m.Value)
+	case "counter":
+		if m.Delta == nil {
+			http.Error(res, "missing delta for counter", http.StatusBadRequest)
+			return
+		}
+		h.storage.UpdateCounter(m.ID, *m.Delta)
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	res.Write([]byte(`{"status":"ok"}`))
+}
+
+func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(res, "Content-Type must be application/json", http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(res, "cannot read body", http.StatusInternalServerError)
+		return
+	}
+	defer req.Body.Close()
+
+	var m models.Metrics
+	if err := json.Unmarshal(body, &m); err != nil {
+		http.Error(res, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	if m.ID == "" || (m.MType != "gauge" && m.MType != "counter") {
+		http.Error(res, "invalid metric id or type", http.StatusBadRequest)
+		return
+	}
+
+	resp := models.Metrics{ID: m.ID, MType: m.MType}
+
+	switch m.MType {
+	case "gauge":
+		value, err := h.storage.GetGauge(m.ID)
+		if errors.Is(err, storage.ErrMetricNotFound) {
+			http.Error(res, "Gauge metric not found", http.StatusNotFound)
+			return
+		}
+		resp.Value = &value
+	case "counter":
+		value, err := h.storage.GetCounter(m.ID)
+		if errors.Is(err, storage.ErrMetricNotFound) {
+			http.Error(res, "Counter metric not found", http.StatusNotFound)
+			return
+		}
+		resp.Delta = &value
+	}
+
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(res, "failed to marshal response", http.StatusInternalServerError)
+		return
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	res.Write(jsonResp)
 }
