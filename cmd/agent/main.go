@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/agent"
@@ -52,26 +56,78 @@ func run() error {
 	// Создаем компоненты
 	collector := agent.NewCollector()
 
-	// Сбор метрик
-	collector.UpdateMetrics()
-	gaugeCount, counterCount := collector.GetMetricsCount()
-	log.Printf("Collected metrics: %d gauges, %d counters", gaugeCount, counterCount)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	// Сон
-	time.Sleep(config.ReportInterval)
+	var wg sync.WaitGroup
 
-	// Отправка метрик
-	serverURL := config.Address
-	if !strings.Contains(serverURL, "http://") && !strings.Contains(serverURL, "https://") {
-		serverURL = "http://" + serverURL
-	}
-	sender := agent.NewSender(serverURL)
-	gauges := collector.GetGauges()
-	counters := collector.GetCounters()
-	if err := sender.SendAllMetrics(gauges, counters); err != nil {
-		log.Printf("Failed to send metrics: %v", err)
-	} else {
-		log.Printf("Successfully sent all metrics")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Printf("Started metrics collection with interval: %v", config.PollInterval)
+		ticker := time.NewTicker(config.PollInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Stopping metrics collection...")
+				return
+			case <-ticker.C:
+				collector.UpdateMetrics()
+				gaugeCount, counterCount := collector.GetMetricsCount()
+				log.Printf("Collected metrics: %d gauges, %d counters", gaugeCount, counterCount)
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Printf("Started metrics reporting with interval: %v", config.ReportInterval)
+		ticker := time.NewTicker(config.ReportInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("Stopping metrics reporting...")
+				return
+			case <-ticker.C:
+				serverURL := config.Address
+				if !strings.Contains(serverURL, "http://") && !strings.Contains(serverURL, "https://") {
+					serverURL = "http://" + serverURL
+				}
+				sender := agent.NewSender(serverURL)
+				gauges := collector.GetGauges()
+				counters := collector.GetCounters()
+				if err := sender.SendAllMetrics(gauges, counters); err != nil {
+					log.Printf("Failed to send metrics: %v", err)
+				} else {
+					log.Printf("Successfully sent all metrics")
+				}
+			}
+		}
+	}()
+
+	log.Printf("Agent is running. Press Ctrl+C to stop.")
+
+	<-ctx.Done()
+	log.Printf("Received shutdown signal...")
+
+	stop()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Printf("Agent stopped gracefully")
+	case <-time.After(5 * time.Second):
+		log.Printf("Shutdown timeout, forcing exit")
 	}
 
 	return nil
