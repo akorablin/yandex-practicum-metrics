@@ -81,7 +81,7 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 	return nil
 }
 
-func (s *Sender) SendGaugeJson(name string, value float64) error {
+func (s *Sender) SendGaugeJSON(name string, value float64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
 	data := models.Metrics{
@@ -94,10 +94,10 @@ func (s *Sender) SendGaugeJson(name string, value float64) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetricJson(url, jsonData)
+	return s.sendMetricJSON(url, jsonData)
 }
 
-func (s *Sender) SendCounterJson(name string, value int64) error {
+func (s *Sender) SendCounterJSON(name string, value int64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
 	data := models.Metrics{
@@ -110,10 +110,10 @@ func (s *Sender) SendCounterJson(name string, value int64) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetricJson(url, jsonData)
+	return s.sendMetricJSON(url, jsonData)
 }
 
-func (s *Sender) sendMetricJson(url string, data []byte) error {
+func (s *Sender) sendMetricJSON(url string, data []byte) error {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
