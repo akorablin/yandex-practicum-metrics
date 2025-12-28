@@ -307,15 +307,13 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 	case "gauge":
 		value, err := h.storage.GetGauge(m.ID)
 		if errors.Is(err, storage.ErrMetricNotFound) {
-			http.Error(res, "Gauge metric not found", http.StatusOK)
-			return
+			value = 0
 		}
 		resp.Value = &value
 	case "counter":
 		value, err := h.storage.GetCounter(m.ID)
 		if errors.Is(err, storage.ErrMetricNotFound) {
-			http.Error(res, "Counter metric not found", http.StatusOK)
-			return
+			value = 0
 		}
 		resp.Delta = &value
 	}
