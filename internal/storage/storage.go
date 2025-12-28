@@ -78,6 +78,10 @@ func (m *MemStorage) LoadFromFile() error {
 		return nil
 	}
 
+	if _, err := os.Stat(m.cfg.FileStoragePath); err != nil && errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
