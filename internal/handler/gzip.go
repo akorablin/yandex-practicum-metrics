@@ -89,6 +89,7 @@ func GzipMiddleware(h http.Handler) http.Handler {
 					return
 				}
 				r.Body = cr
+				ow.Header().Set("Content-Encoding", "gzip")
 				defer cr.Close()
 			}
 		}
