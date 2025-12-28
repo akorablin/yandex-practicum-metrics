@@ -27,6 +27,8 @@ func NewHandlers() *Handlers {
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
+	r.Use(GzipMiddleware)
+
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
 	r.Post("/update/", h.updateMetricJSONHandler)
@@ -201,9 +203,11 @@ func (h *Handlers) rootHandler(res http.ResponseWriter, req *http.Request) {
         <div style="margin-top: 30px; padding: 15px; background-color: #e7f3ff; border-left: 4px solid #2196F3;">
             <h3>API Endpoints:</h3>
             <ul>
-                <li><code>POST /update/{type}/{name}/{value}</code> - Update metric</li>
-                <li><code>GET /value/{type}/{name}</code> - Get metric value</li>
-                <li><code>GET /</code> - This dashboard</li>
+                <li><code>POST /update/{type}/{name}/{value}- Update metric</code> </li>
+                <li><code>GET /value/{type}/{name} - Get metric value</code></li>
+				<li><code>POST /update - Update metric (JSON)</code></li>
+                <li><code>GET /value - Get metric value (JSON)</code></li>                
+				<li><code>GET / - This dashboard</code></li>
             </ul>
         </div>
     </div>

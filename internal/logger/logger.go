@@ -66,19 +66,19 @@ func WithLogging(h http.Handler) http.Handler {
 			size:   0,
 		}
 		lw := loggingResponseWriter{
-			ResponseWriter: w, // встраиваем оригинальный http.ResponseWriter
+			ResponseWriter: w,
 			responseData:   responseData,
 		}
-		h.ServeHTTP(&lw, r) // внедряем реализацию http.ResponseWriter
+		h.ServeHTTP(&lw, r)
 
 		duration := time.Since(start)
 
 		Log.Info("Got incoming HTTP request",
 			zap.String("uri", r.RequestURI),
 			zap.String("method", r.Method),
-			zap.Int("status", responseData.status), // получаем перехваченный код статуса ответа
+			zap.Int("status", responseData.status),
 			zap.Duration("duration", duration),
-			zap.Int("size", responseData.size), // получаем перехваченный размер ответа
+			zap.Int("size", responseData.size),
 		)
 	}
 	return http.HandlerFunc(logFn)

@@ -53,8 +53,15 @@ func run() error {
 	log.Printf("  Poll interval: %v", config.PollInterval)
 	log.Printf("  Report interval: %v", config.ReportInterval)
 
-	// Создаем компоненты
+	// Создаем "сборщик" метрик
 	collector := agent.NewCollector()
+
+	// Создаем "отправщик" метрик
+	serverURL := config.Address
+	if !strings.Contains(serverURL, "http://") && !strings.Contains(serverURL, "https://") {
+		serverURL = "http://" + serverURL
+	}
+	sender := agent.NewSender(serverURL)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -94,11 +101,6 @@ func run() error {
 				log.Printf("Stopping metrics reporting...")
 				return
 			case <-ticker.C:
-				serverURL := config.Address
-				if !strings.Contains(serverURL, "http://") && !strings.Contains(serverURL, "https://") {
-					serverURL = "http://" + serverURL
-				}
-				sender := agent.NewSender(serverURL)
 				gauges := collector.GetGauges()
 				counters := collector.GetCounters()
 				if err := sender.SendAllMetrics(gauges, counters); err != nil {
