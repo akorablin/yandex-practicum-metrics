@@ -27,7 +27,7 @@ func NewHandlers() *Handlers {
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
-	//r.Use(GzipMiddleware)
+	r.Use(GzipMiddleware)
 
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
