@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/config"
+	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +67,9 @@ func TestUpdateHandler(t *testing.T) {
 			request.Header.Set("Content-Type", "text/plain")
 			w := httptest.NewRecorder()
 
-			h := NewHandlers()
+			cfg, _ := config.GetServerConfig()
+			memStorage := storage.NewMemStorage(cfg)
+			h := NewHandlers(memStorage)
 			h.updateHandler(w, request)
 
 			res := w.Result()

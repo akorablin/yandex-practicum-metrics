@@ -1,20 +1,20 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
 	"github.com/akorablin/yandex-practicum-metrics/internal/logger"
-	"go.uber.org/zap"
+	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 )
-
-type ServerConfig struct {
-	Address  string
-	LogLevel string
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -23,53 +23,66 @@ func main() {
 }
 
 func run() error {
-	// Флаги командной строки
-	config, err := parseFlags()
+	cfg, err := config.GetServerConfig()
 	if err != nil {
-		return fmt.Errorf("error parsing flags: %w", err)
-	}
-
-	// Флаги из переменных окружения
-	config, err = applyEnv(config)
-	if err != nil {
-		return fmt.Errorf("error apply env: %w", err)
+		return fmt.Errorf("eror parsing flags: %w", err)
 	}
 
 	// Логирование
-	if err := logger.Initialize(config.LogLevel); err != nil {
+	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return err
 	}
 
-	logger.Log.Info("Running server", zap.String("address", config.Address))
+	logger.Log.Info("Running server")
 
-	handlers := handler.NewHandlers()
-	return http.ListenAndServe(config.Address, logger.WithLogging(handlers.GetRoutes()))
-}
+	memStorage := storage.NewMemStorage(cfg)
+	handlers := handler.NewHandlers(memStorage)
 
-func parseFlags() (*ServerConfig, error) {
-	config := &ServerConfig{}
-
-	// Работа с командной строкой
-	flag.StringVar(&config.Address, "a", "localhost:8080", "HTTP server endpoint address")
-	flag.StringVar(&config.LogLevel, "l", "info", "Log level")
-	flag.Parse()
-
-	// Валидация
-	if flag.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "Error: unknown arguments: %v\n", flag.Args())
-		fmt.Fprintf(os.Stderr, "Usage options:\n")
-		flag.PrintDefaults()
-		return nil, fmt.Errorf("unknown arguments provided")
+	loadFileError := memStorage.LoadFromFile()
+	if loadFileError != nil {
+		return loadFileError
 	}
 
-	return config, nil
-}
+	go func() {
+		err = http.ListenAndServe(cfg.Address, logger.WithLogging(handlers.GetRoutes()))
+		if err != nil {
+			logger.Log.Error("Failed start server")
+			os.Exit(1)
+		}
+	}()
 
-func applyEnv(config *ServerConfig) (*ServerConfig, error) {
-	// Переменная окружения ADDRESS
-	if addr := os.Getenv("ADDRESS"); addr != "" {
-		config.Address = addr
+	ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
+	defer ticker.Stop()
+
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+
+	wd, _ := os.Getwd()
+	dir, _ := filepath.Split(cfg.FileStoragePath)
+	if err := os.MkdirAll(filepath.Join(wd, dir), 0o777); err != nil {
+		fmt.Println(err)
 	}
 
-	return config, nil
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				err := memStorage.SaveToFile()
+				if err != nil {
+					log.Printf("Failed to save metrics: %v", err)
+				}
+			case <-done:
+				err := memStorage.SaveToFile()
+				if err != nil {
+					log.Printf("Failed to save metrics: %v", err)
+				}
+				close(done)
+				return
+			}
+		}
+	}()
+
+	<-done
+
+	return nil
 }

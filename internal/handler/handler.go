@@ -20,8 +20,7 @@ type Handlers struct {
 	storage storage.Storage
 }
 
-func NewHandlers() *Handlers {
-	metricsStorage := storage.NewMemStorage()
+func NewHandlers(metricsStorage *storage.MemStorage) *Handlers {
 	return &Handlers{storage: metricsStorage}
 }
 
