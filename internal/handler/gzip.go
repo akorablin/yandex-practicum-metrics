@@ -29,9 +29,10 @@ func GzipMiddleware(next http.Handler) http.Handler {
 			r.Body = gzipReader
 		}
 
-		// Проверка типа контента
+		// Проверка заголовков "Accept" и "Content-Type"
 		contentType := r.Header.Get("Content-Type")
-		if contentType != "application/json" && contentType != "text/html" {
+		accept := r.Header.Get("Accept")
+		if contentType != "application/json" && contentType != "text/html" && accept != "application/json" && accept != "text/html" {
 			next.ServeHTTP(w, r)
 			return
 		}

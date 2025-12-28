@@ -55,6 +55,7 @@ go run cmd/server/main.go -l debug
 go run cmd/agent/main.go
 
 ## Для отладки - тестовый запрос через curl
+curl -X GET -H "Content-Type: text/html" -H "Accept-Encoding: gzip" "http://localhost:8080/" -I -v
 curl -X POST -H "Content-Type: text/plain" "http://localhost:8080/update/gauge/TestMetric/123.456"
 curl -X POST -H "Content-Type: text/plain" -w '%{http_code}\n' "http://localhost:8080/update/gauge/TestMetric/123.456"
 curl -X POST -H "Content-Type: application/json" -d '{"id":"LastGC","type":"gauge","value":1744184459}' "http://localhost:8080/update/" 
