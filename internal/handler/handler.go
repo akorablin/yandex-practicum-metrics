@@ -269,7 +269,6 @@ func (h *Handlers) updateMetricJSONHandler(res http.ResponseWriter, req *http.Re
 		logger.Log.Info("Update gauge",
 			zap.String("name", m.ID),
 			zap.Float64("value", *m.Value),
-			zap.String("type", "gauge"),
 		)
 		h.storage.UpdateGauge(m.ID, *m.Value)
 	case "counter":
@@ -280,7 +279,6 @@ func (h *Handlers) updateMetricJSONHandler(res http.ResponseWriter, req *http.Re
 		logger.Log.Info("Update counter",
 			zap.String("name", m.ID),
 			zap.Int64("delta", *m.Delta),
-			zap.String("type", "counter"),
 		)
 		h.storage.UpdateCounter(m.ID, *m.Delta)
 	}
@@ -324,7 +322,6 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 		logger.Log.Info("Get gauge",
 			zap.String("name", m.ID),
 			zap.Float64("value", value),
-			zap.String("type", "gauge"),
 		)
 		resp.Value = &value
 	case "counter":
@@ -335,7 +332,6 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 		logger.Log.Info("Get counter",
 			zap.String("name", m.ID),
 			zap.Int64("delta", value),
-			zap.String("type", "counter"),
 		)
 		resp.Delta = &value
 	}
@@ -345,6 +341,10 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 		http.Error(res, "failed to marshal response", http.StatusInternalServerError)
 		return
 	}
+
+	logger.Log.Info("Get result",
+		zap.String("data", string(jsonResp)),
+	)
 
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
