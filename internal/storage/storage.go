@@ -138,7 +138,7 @@ func (m *MemStorage) SaveToFile() error {
 
 	WriteFileError := os.WriteFile(path, bytes, 0644)
 	if WriteFileError != nil {
-		log.Printf("os.WriteFile error")
+		log.Printf("os.WriteFile error for path %s", path)
 		return WriteFileError
 	}
 
