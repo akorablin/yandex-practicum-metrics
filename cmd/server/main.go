@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -51,19 +52,17 @@ func run() error {
 		}
 	}()
 
-	ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
-	defer ticker.Stop()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+	var wg sync.WaitGroup
 
-	wd, _ := os.Getwd()
-	dir, _ := filepath.Split(cfg.FileStoragePath)
-	if err := os.MkdirAll(filepath.Join(wd, dir), 0o777); err != nil {
-		fmt.Println(err)
-	}
-
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ticker.C:
@@ -71,18 +70,35 @@ func run() error {
 				if err != nil {
 					log.Printf("Failed to save metrics: %v", err)
 				}
-			case <-done:
+			case <-ctx.Done():
 				err := memStorage.SaveToFile()
 				if err != nil {
 					log.Printf("Failed to save metrics: %v", err)
 				}
-				close(done)
 				return
 			}
 		}
 	}()
 
-	<-done
+	log.Printf("Server is running. Press Ctrl+C to stop.")
+
+	<-ctx.Done()
+	log.Printf("Received shutdown signal...")
+
+	stop()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Printf("Server stopped gracefully")
+	case <-time.After(5 * time.Second):
+		log.Printf("Shutdown timeout, forcing exit")
+	}
 
 	return nil
 }
