@@ -102,7 +102,7 @@ func (m *MemStorage) LoadFromFile() error {
 		if mType == "gauge" {
 			m.UpdateGauge(ID, *value)
 		}
-		if mType == models.Counter {
+		if mType == "counter" {
 			m.UpdateCounter(ID, *delta)
 		}
 	}
@@ -116,7 +116,7 @@ func (m *MemStorage) SaveToFile() error {
 		return err
 	}
 	path := filepath.Join(wd, m.cfg.FileStoragePath)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -137,9 +137,10 @@ func (m *MemStorage) SaveToFile() error {
 	if err != nil {
 		return err
 	}
-	_, err = file.Write(bytes)
-	if err != nil {
-		return err
+
+	WriteFileError := os.WriteFile(path, bytes, 0644)
+	if WriteFileError != nil {
+		return WriteFileError
 	}
 
 	return nil

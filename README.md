@@ -63,3 +63,5 @@ curl -X POST -H "Content-Type: application/json" -H "Accept: application/json" -
 curl -X POST -H "Content-Type: application/json" -H "Accept: application/json" -d '{"id":"Test","type":"counter"}' "http://localhost:8080/value/" 
 curl -X POST -H "Content-Type: application/json" -H "Accept: application/json" -v -d '{"id":"LastGC","type":"gauge"}' "http://localhost:8080/value/"
 curl -X POST -H "Content-Type: application/json" -H "Accept-Encoding: gzip" -v -d '{"id":"LastGC","type":"gauge","value":1744184459}' "http://localhost:8080/update/" 
+
+[{"id":"Test3","type":"gauge","value":5.3},{"id":"Test4","type":"gauge","value":7},{"id":"Test","type":"counter","delta":2},{"id":"Test2","type":"counter","delta":4}]
