@@ -6,7 +6,6 @@ import (
 	"log"
 	"maps"
 	"os"
-	"path/filepath"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
@@ -83,11 +82,12 @@ func (m *MemStorage) LoadFromFile() error {
 		return nil
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(wd, m.cfg.FileStoragePath)
+	// wd, err := os.Getwd()
+	// if err != nil {
+	// 	return err
+	// }
+	// path := filepath.Join(wd, m.cfg.FileStoragePath)
+	path := m.cfg.FileStoragePath
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -112,12 +112,18 @@ func (m *MemStorage) LoadFromFile() error {
 }
 
 func (m *MemStorage) SaveToFile() error {
-	wd, err := os.Getwd()
+	// wd, err := os.Getwd()
+	// if err != nil {
+	// 	log.Printf("os.Getwd error")
+	// 	return err
+	// }
+	// path := filepath.Join(wd, m.cfg.FileStoragePath)
+	path := m.cfg.FileStoragePath
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		log.Printf("os.Getwd error")
 		return err
 	}
-	path := filepath.Join(wd, m.cfg.FileStoragePath)
+	defer file.Close()
 
 	var gauges, counters = m.GetAllMetrics()
 	all := make([]models.Metrics, 0, len(gauges)+len(counters))
@@ -136,7 +142,7 @@ func (m *MemStorage) SaveToFile() error {
 		return err
 	}
 
-	WriteFileError := os.WriteFile(path, bytes, 0644)
+	WriteFileError := os.WriteFile(path, bytes, 0o644)
 	if WriteFileError != nil {
 		log.Printf("os.WriteFile error for path %s", path)
 		return WriteFileError
