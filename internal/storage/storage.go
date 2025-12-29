@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"maps"
 	"os"
 	"path/filepath"
@@ -113,11 +114,13 @@ func (m *MemStorage) LoadFromFile() error {
 func (m *MemStorage) SaveToFile() error {
 	wd, err := os.Getwd()
 	if err != nil {
+		log.Printf("os.Getwd error")
 		return err
 	}
 	path := filepath.Join(wd, m.cfg.FileStoragePath)
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
+		log.Printf("Open file error")
 		return err
 	}
 	defer file.Close()
@@ -135,11 +138,13 @@ func (m *MemStorage) SaveToFile() error {
 
 	bytes, err := json.Marshal(all)
 	if err != nil {
+		log.Printf("Marshal error")
 		return err
 	}
 
 	WriteFileError := os.WriteFile(path, bytes, 0644)
 	if WriteFileError != nil {
+		log.Printf("os.WriteFile error")
 		return WriteFileError
 	}
 
