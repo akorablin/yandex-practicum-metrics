@@ -11,9 +11,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/logger"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 )
 
 type Handlers struct {
@@ -264,12 +266,22 @@ func (h *Handlers) updateMetricJSONHandler(res http.ResponseWriter, req *http.Re
 			http.Error(res, "missing value for gauge", http.StatusBadRequest)
 			return
 		}
+		logger.Log.Info("Update gauge",
+			zap.String("name", m.ID),
+			zap.Float64("value", *m.Value),
+			zap.String("type", "gauge"),
+		)
 		h.storage.UpdateGauge(m.ID, *m.Value)
 	case "counter":
 		if m.Delta == nil {
 			http.Error(res, "missing delta for counter", http.StatusBadRequest)
 			return
 		}
+		logger.Log.Info("Update counter",
+			zap.String("name", m.ID),
+			zap.Int64("delta", *m.Delta),
+			zap.String("type", "counter"),
+		)
 		h.storage.UpdateCounter(m.ID, *m.Delta)
 	}
 
@@ -309,12 +321,22 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 		if errors.Is(err, storage.ErrMetricNotFound) {
 			value = 0
 		}
+		logger.Log.Info("Get gauge",
+			zap.String("name", m.ID),
+			zap.Float64("value", value),
+			zap.String("type", "gauge"),
+		)
 		resp.Value = &value
 	case "counter":
 		value, err := h.storage.GetCounter(m.ID)
 		if errors.Is(err, storage.ErrMetricNotFound) {
 			value = 0
 		}
+		logger.Log.Info("Get counter",
+			zap.String("name", m.ID),
+			zap.Int64("delta", value),
+			zap.String("type", "counter"),
+		)
 		resp.Delta = &value
 	}
 
