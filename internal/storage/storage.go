@@ -118,12 +118,6 @@ func (m *MemStorage) SaveToFile() error {
 		return err
 	}
 	path := filepath.Join(wd, m.cfg.FileStoragePath)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("Open file error")
-		return err
-	}
-	defer file.Close()
 
 	var gauges, counters = m.GetAllMetrics()
 	all := make([]models.Metrics, 0, len(gauges)+len(counters))
