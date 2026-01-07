@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -24,18 +23,18 @@ func main() {
 }
 
 func run() error {
+	// Получаем конфиг для сервера
 	cfg, err := config.GetServerConfig()
 	if err != nil {
-		return fmt.Errorf("eror parsing flags: %w", err)
+		return fmt.Errorf("error parsing flags: %w", err)
 	}
 
-	// Логирование
+	// Создаем "логгер"
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return err
 	}
 
-	logger.Log.Info("Running server")
-
+	// Инициализируем сервер
 	memStorage := storage.NewMemStorage(cfg)
 	handlers := handler.NewHandlers(memStorage)
 
@@ -44,61 +43,61 @@ func run() error {
 		return loadFileError
 	}
 
-	go func() {
-		err = http.ListenAndServe(cfg.Address, logger.WithLogging(handlers.GetRoutes()))
-		if err != nil {
-			logger.Log.Error("Failed start server")
-			os.Exit(1)
-		}
-	}()
+	r := handlers.GetRoutes()
+	r = logger.WithLogging(r)
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	// Инициализируем обновление метрик
+	if cfg.StoreInterval > 0 {
+		// Через интервал времени
 		ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				err := memStorage.SaveToFile()
-				if err != nil {
+		go func() {
+			for range ticker.C {
+				if err := memStorage.SaveToFile(); err != nil {
 					log.Printf("Failed to save metrics: %v", err)
+				} else {
+					log.Println("Metrics saved by StoreInterval")
 				}
-			case <-ctx.Done():
-				err := memStorage.SaveToFile()
-				if err != nil {
-					log.Printf("Failed to save metrics: %v", err)
-				}
-				return
 			}
+		}()
+	} else {
+		// Синхронно через middleware
+		r = memStorage.SyncMetricSaving(r)
+	}
+
+	// Запускаем сервер
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	server := &http.Server{
+		Addr:    cfg.Address,
+		Handler: r,
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed start server: %v", err)
 		}
 	}()
+	logger.Log.Info("Server started")
+	log.Println("Server is running. Press Ctrl+C to stop.")
 
-	log.Printf("Server is running. Press Ctrl+C to stop.")
+	// Отключаем сервер
+	<-quit
+	log.Println("Received shutdown signal...")
 
-	<-ctx.Done()
-	log.Printf("Received shutdown signal...")
-
-	stop()
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		log.Printf("Server stopped gracefully")
-	case <-time.After(5 * time.Second):
-		log.Printf("Shutdown timeout, forcing exit")
+	log.Println("Saving metrics...")
+	if err := memStorage.SaveToFile(); err != nil {
+		log.Printf("Failed to save metrics: %v", err)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Failed stop server: %v", err)
+	}
+	logger.Log.Info("Server stopped")
 
 	return nil
 }

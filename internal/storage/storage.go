@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"maps"
+	"net/http"
 	"os"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
@@ -82,11 +83,6 @@ func (m *MemStorage) LoadFromFile() error {
 		return nil
 	}
 
-	// wd, err := os.Getwd()
-	// if err != nil {
-	// 	return err
-	// }
-	// path := filepath.Join(wd, m.cfg.FileStoragePath)
 	path := m.cfg.FileStoragePath
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -112,12 +108,6 @@ func (m *MemStorage) LoadFromFile() error {
 }
 
 func (m *MemStorage) SaveToFile() error {
-	// wd, err := os.Getwd()
-	// if err != nil {
-	// 	log.Printf("os.Getwd error")
-	// 	return err
-	// }
-	// path := filepath.Join(wd, m.cfg.FileStoragePath)
 	path := m.cfg.FileStoragePath
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -149,4 +139,16 @@ func (m *MemStorage) SaveToFile() error {
 	}
 
 	return nil
+}
+
+func (m *MemStorage) SyncMetricSaving(h http.Handler) http.Handler {
+	syncSavingFn := func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+		if err := m.SaveToFile(); err != nil {
+			log.Printf("Failed to save metrics: %v", err)
+		} else {
+			log.Println("Metrics saved synchronously")
+		}
+	}
+	return http.HandlerFunc(syncSavingFn)
 }

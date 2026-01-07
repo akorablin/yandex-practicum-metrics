@@ -40,7 +40,7 @@ func main() {
 func run() error {
 	config, err := parseFlags()
 	if err != nil {
-		return fmt.Errorf("eror parsing flags: %w", err)
+		return fmt.Errorf("error parsing flags: %w", err)
 	}
 
 	config, err = applyEnv(config)
