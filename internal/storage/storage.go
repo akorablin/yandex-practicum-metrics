@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
@@ -141,13 +142,34 @@ func (m *MemStorage) SaveToFile() error {
 	return nil
 }
 
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *responseWriter) WriteHeader(code int) {
+	r.statusCode = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
 func (m *MemStorage) SyncMetricSaving(h http.Handler) http.Handler {
 	syncSavingFn := func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(w, r)
-		if err := m.SaveToFile(); err != nil {
-			log.Printf("Failed to save metrics: %v", err)
-		} else {
-			log.Println("Metrics saved synchronously")
+		rw := &responseWriter{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+		}
+
+		h.ServeHTTP(rw, r)
+
+		// Сохраняем после успешного POST запроса к /update
+		if r.Method == http.MethodPost &&
+			(strings.HasPrefix(r.URL.Path, "/update/") || r.URL.Path == "/update") &&
+			rw.statusCode == http.StatusOK {
+			if err := m.SaveToFile(); err != nil {
+				log.Printf("Failed to save metrics: %v", err)
+			} else {
+				log.Println("Metrics saved synchronously")
+			}
 		}
 	}
 	return http.HandlerFunc(syncSavingFn)

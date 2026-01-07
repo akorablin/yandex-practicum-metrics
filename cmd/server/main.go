@@ -95,7 +95,7 @@ func run() error {
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Failed stop server: %v", err)
+		log.Fatalf("Failed to stop server: %v", err)
 	}
 	logger.Log.Info("Server stopped")
 
