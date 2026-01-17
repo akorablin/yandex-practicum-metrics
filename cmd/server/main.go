@@ -12,7 +12,7 @@ import (
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
-	"github.com/akorablin/yandex-practicum-metrics/internal/logger"
+	logger "github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 )
 
@@ -23,30 +23,36 @@ func main() {
 }
 
 func run() error {
-	// Получаем конфиг для сервера
+	// Получаем настройки конфигурации для сервера
 	cfg, err := config.GetServerConfig()
 	if err != nil {
 		return fmt.Errorf("error parsing flags: %w", err)
 	}
 
-	// Создаем синглтон объект логирования
+	// Создаем "singleton" логирования
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return err
 	}
 
-	// Инициализируем сервер
+	// Инициализируем хранилище
 	memStorage := storage.NewMemStorage(cfg)
+
+	// Инициализируем обработчики запросов
 	handlers := handler.NewHandlers(memStorage)
 
+	// Загруженам метрики из файла
 	loadFileError := memStorage.LoadFromFile()
 	if loadFileError != nil {
 		return loadFileError
 	}
 
+	// Инициализируем обработчики запросов
 	r := handlers.GetRoutes()
+
+	// Подключаем middleware c логированием
 	r = logger.WithLogging(r)
 
-	// Инициализируем обновление метрик
+	// Обновление метрик
 	if cfg.StoreInterval > 0 {
 		// Через интервал времени
 		ticker := time.NewTicker(time.Duration(cfg.StoreInterval) * time.Second)
@@ -69,7 +75,6 @@ func run() error {
 	// Запускаем сервер
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	server := &http.Server{
 		Addr:    cfg.Address,
 		Handler: r,
@@ -85,15 +90,12 @@ func run() error {
 	// Отключаем сервер
 	<-quit
 	log.Println("Received shutdown signal...")
-
 	log.Println("Saving metrics...")
 	if err := memStorage.SaveToFile(); err != nil {
 		log.Printf("Failed to save metrics: %v", err)
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed to stop server: %v", err)
 	}

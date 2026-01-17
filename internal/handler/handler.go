@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/go-chi/chi"
@@ -26,7 +27,7 @@ func NewHandlers(metricsStorage *storage.MemStorage) *Handlers {
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(GzipMiddleware)
+	r.Use(middleware.GzipMiddleware)
 
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
