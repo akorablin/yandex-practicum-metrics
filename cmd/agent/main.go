@@ -42,7 +42,7 @@ func run() error {
 	defer stop()
 	var wg sync.WaitGroup
 
-	// "Сборщик"
+	// Рутина "сборщика" метрик
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -63,7 +63,7 @@ func run() error {
 		}
 	}()
 
-	// "Отправщик"
+	// Рутина "отправщика" метрик
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
