@@ -77,7 +77,6 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 		return fmt.Errorf("server returned status %d for %s %s", resp.StatusCode, metricType, metricName)
 	}
 
-	// log.Printf("Sent %s metric: %s", metricType, metricName)
 	return nil
 }
 
