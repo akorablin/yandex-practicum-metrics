@@ -41,6 +41,7 @@ func getEnvOrDefaultBool(envVar string, defaultValue bool) bool {
 }
 
 func GetServerConfig() (*ServerConfig, error) {
+	// Настройки из переменных окружения
 	cfg := &ServerConfig{
 		Address:         getEnvOrDefaultString("ADDRESS", "localhost:8080"),
 		LogLevel:        getEnvOrDefaultString("LOG_LEVEL", "info"),
@@ -49,15 +50,15 @@ func GetServerConfig() (*ServerConfig, error) {
 		Restore:         getEnvOrDefaultBool("RESTORE", true),
 	}
 
+	// Настройки из командной строки
 	serverAddress := flag.String("a", cfg.Address, "server address")
 	logLevel := flag.String("l", cfg.LogLevel, "log level")
 	storeInterval := flag.Int("i", cfg.StoreInterval, "store interval")
 	fileStoragePath := flag.String("f", cfg.FileStoragePath, "file storage path")
 	restore := flag.Bool("r", cfg.Restore, "restore")
-
 	flag.Parse()
 
-	// Валидация
+	// Валидация командной строки
 	if flag.NArg() > 0 {
 		fmt.Fprintf(os.Stderr, "Error: unknown arguments: %v\n", flag.Args())
 		fmt.Fprintf(os.Stderr, "Usage options:\n")
@@ -65,12 +66,14 @@ func GetServerConfig() (*ServerConfig, error) {
 		return nil, fmt.Errorf("unknown arguments provided")
 	}
 
+	// Сохраняем настройки
 	cfg.Address = *serverAddress
 	cfg.LogLevel = *logLevel
 	cfg.StoreInterval = *storeInterval
 	cfg.FileStoragePath = *fileStoragePath
 	cfg.Restore = *restore
 
+	// Отображение настроек
 	fmt.Println("Server Address:", cfg.Address)
 	fmt.Println("Log Level:", cfg.LogLevel)
 	fmt.Println("Store Interval:", cfg.StoreInterval)

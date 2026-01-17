@@ -29,7 +29,7 @@ func run() error {
 		return fmt.Errorf("error parsing flags: %w", err)
 	}
 
-	// Создаем "логгер"
+	// Создаем синглтон объект логирования
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return err
 	}
