@@ -14,6 +14,8 @@ import (
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
 	logger "github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
+	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -37,8 +39,17 @@ func run() error {
 	// Инициализируем хранилище
 	memStorage := storage.NewMemStorage(cfg)
 
+	// Проверяем соединение с БД
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, cfg.DataBaseDSN)
+	if err != nil {
+		logger.Log.Info("Error connecting to DB", zap.Error(err))
+	} else {
+		defer conn.Close(ctx)
+	}
+
 	// Инициализируем обработчики запросов
-	handlers := handler.NewHandlers(memStorage)
+	handlers := handler.NewHandlers(memStorage, conn)
 
 	// Загруженам метрики из файла
 	loadFileError := memStorage.LoadFromFile()

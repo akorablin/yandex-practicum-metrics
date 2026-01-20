@@ -14,6 +14,7 @@ type ServerConfig struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
+	DataBaseDSN     string
 }
 
 type AgentConfig struct {
@@ -64,6 +65,7 @@ func GetServerConfig() (*ServerConfig, error) {
 		StoreInterval:   getEnvOrDefaultInt("STORE_INTERVAL", 300),
 		FileStoragePath: getEnvOrDefaultString("FILE_STORAGE_PATH", "tmp/metrics.json"),
 		Restore:         getEnvOrDefaultBool("RESTORE", true),
+		DataBaseDSN:     getEnvOrDefaultString("DATABASE_DSN", ""),
 	}
 
 	// Настройки из командной строки
@@ -72,6 +74,7 @@ func GetServerConfig() (*ServerConfig, error) {
 	storeInterval := flag.Int("i", cfg.StoreInterval, "store interval")
 	fileStoragePath := flag.String("f", cfg.FileStoragePath, "file storage path")
 	restore := flag.Bool("r", cfg.Restore, "restore")
+	dataBaseDSN := flag.String("d", cfg.DataBaseDSN, "database dsn")
 	flag.Parse()
 
 	// Валидация командной строки
@@ -88,6 +91,7 @@ func GetServerConfig() (*ServerConfig, error) {
 	cfg.StoreInterval = *storeInterval
 	cfg.FileStoragePath = *fileStoragePath
 	cfg.Restore = *restore
+	cfg.DataBaseDSN = *dataBaseDSN
 
 	// Отображение настроек
 	fmt.Println("Server Address:", cfg.Address)
@@ -95,6 +99,7 @@ func GetServerConfig() (*ServerConfig, error) {
 	fmt.Println("Store Interval:", cfg.StoreInterval)
 	fmt.Println("File Storage Path:", cfg.FileStoragePath)
 	fmt.Println("Restore:", cfg.Restore)
+	fmt.Println("DataBaseDSN:", cfg.DataBaseDSN)
 
 	return cfg, nil
 }

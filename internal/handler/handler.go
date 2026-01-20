@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,14 +16,19 @@ import (
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/go-chi/chi"
+	"github.com/jackc/pgx/v5"
 )
 
 type Handlers struct {
 	storage storage.Storage
+	dbConn  *pgx.Conn
 }
 
-func NewHandlers(metricsStorage *storage.MemStorage) *Handlers {
-	return &Handlers{storage: metricsStorage}
+func NewHandlers(metricsStorage *storage.MemStorage, dbConn *pgx.Conn) *Handlers {
+	return &Handlers{
+		storage: metricsStorage,
+		dbConn:  dbConn,
+	}
 }
 
 func (h *Handlers) GetRoutes() http.Handler {
@@ -33,6 +39,7 @@ func (h *Handlers) GetRoutes() http.Handler {
 	r.Get("/value/{type}/{name}", h.valueHandler)
 	r.Post("/update/", h.updateMetricJSONHandler)
 	r.Post("/value/", h.valueMetricJSONHandler)
+	r.Get("/ping", h.pingHandler)
 	r.Get("/", h.rootHandler)
 
 	return r
@@ -206,7 +213,8 @@ func (h *Handlers) rootHandler(res http.ResponseWriter, req *http.Request) {
                 <li><code>POST /update/{type}/{name}/{value}- Update metric</code> </li>
                 <li><code>GET /value/{type}/{name} - Get metric value</code></li>
 				<li><code>POST /update - Update metric (JSON)</code></li>
-                <li><code>GET /value - Get metric value (JSON)</code></li>                
+                <li><code>GET /value - Get metric value (JSON)</code></li>
+				<li><code>GET /ping - Ping DB</code></li>
 				<li><code>GET / - This dashboard</code></li>
             </ul>
         </div>
@@ -328,4 +336,20 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
 	res.Write(jsonResp)
+}
+
+func (h *Handlers) pingHandler(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Content-Type", "text/html")
+
+	if h.dbConn == nil {
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err := h.dbConn.Ping(context.Background())
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	res.WriteHeader(http.StatusOK)
 }
