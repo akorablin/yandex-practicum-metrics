@@ -12,9 +12,9 @@ import (
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	db "github.com/akorablin/yandex-practicum-metrics/internal/config/db"
+	logger "github.com/akorablin/yandex-practicum-metrics/internal/config/logger"
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
 	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
-	logger "github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	dbStorage "github.com/akorablin/yandex-practicum-metrics/internal/storage/db"
 	memoryStorage "github.com/akorablin/yandex-practicum-metrics/internal/storage/memory"
@@ -65,9 +65,6 @@ func run() error {
 
 	// Инициализируем обработчики запросов
 	r := handlers.GetRoutes()
-
-	// Подключаем middleware c логированием
-	r = logger.WithLogging(r)
 
 	// Обновление метрик
 	if cfg.StoreInterval > 0 {

@@ -31,6 +31,7 @@ func NewHandlers(repo storage.Storage) *Handlers {
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.GzipMiddleware)
+	r.Use(middleware.WithLogging)
 
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
