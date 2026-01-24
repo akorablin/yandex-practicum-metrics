@@ -1,9 +1,11 @@
-package storage
+package middleware
 
 import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 )
 
 type responseWriter struct {
@@ -16,7 +18,7 @@ func (r *responseWriter) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-func (m *MemStorage) SyncMetricSaving(next http.Handler) http.Handler {
+func SyncSaving(next http.Handler, repo storage.Storage) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rw := &responseWriter{
 			ResponseWriter: w,
@@ -30,7 +32,7 @@ func (m *MemStorage) SyncMetricSaving(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost &&
 			(strings.HasPrefix(r.URL.Path, "/update/") || r.URL.Path == "/update") &&
 			rw.statusCode == http.StatusOK {
-			if err := m.SaveToFile(); err != nil {
+			if err := repo.SaveToFile(); err != nil {
 				log.Printf("Failed to save metrics: %v", err)
 			} else {
 				log.Println("Metrics saved synchronously")

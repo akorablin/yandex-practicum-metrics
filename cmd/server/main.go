@@ -11,10 +11,13 @@ import (
 	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
+	db "github.com/akorablin/yandex-practicum-metrics/internal/config/db"
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
+	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	logger "github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
-	"github.com/jackc/pgx/v5"
+	dbStorage "github.com/akorablin/yandex-practicum-metrics/internal/storage/db"
+	memoryStorage "github.com/akorablin/yandex-practicum-metrics/internal/storage/memory"
 	"go.uber.org/zap"
 )
 
@@ -36,23 +39,26 @@ func run() error {
 		return err
 	}
 
-	// Инициализируем хранилище
-	memStorage := storage.NewMemStorage(cfg)
+	var repo storage.Storage
+	var useDB bool
 
-	// Проверяем соединение с БД
-	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, cfg.DataBaseDSN)
-	if err != nil {
-		logger.Log.Info("Error connecting to DB", zap.Error(err))
+	// Инициализируем хранилище
+	logger.Log.Info("Подключение к БД", zap.String("DataBaseDSN", cfg.DataBaseDSN))
+	if err := db.Init(cfg.DataBaseDSN); err != nil {
+		useDB = false
+		log.Printf("БД недоступна: %v", err)
+		repo = memoryStorage.New(cfg)
 	} else {
-		defer conn.Close(ctx)
+		useDB = true
+		log.Printf("БД доступна!")
+		repo = dbStorage.New(cfg)
 	}
 
 	// Инициализируем обработчики запросов
-	handlers := handler.NewHandlers(memStorage, conn)
+	handlers := handler.NewHandlers(repo)
 
 	// Загруженам метрики из файла
-	loadFileError := memStorage.LoadFromFile()
+	loadFileError := repo.LoadFromFile()
 	if loadFileError != nil {
 		return loadFileError
 	}
@@ -71,7 +77,7 @@ func run() error {
 
 		go func() {
 			for range ticker.C {
-				if err := memStorage.SaveToFile(); err != nil {
+				if err := repo.SaveToFile(); err != nil {
 					log.Printf("Failed to save metrics: %v", err)
 				} else {
 					log.Println("Metrics saved by StoreInterval")
@@ -80,7 +86,7 @@ func run() error {
 		}()
 	} else {
 		// Синхронно через middleware
-		r = memStorage.SyncMetricSaving(r)
+		r = middleware.SyncSaving(r, repo)
 	}
 
 	// Запускаем сервер
@@ -102,13 +108,16 @@ func run() error {
 	<-quit
 	log.Println("Received shutdown signal...")
 	log.Println("Saving metrics...")
-	if err := memStorage.SaveToFile(); err != nil {
+	if err := repo.SaveToFile(); err != nil {
 		log.Printf("Failed to save metrics: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed to stop server: %v", err)
+	}
+	if useDB {
+		db.DB.Close()
 	}
 	logger.Log.Info("Server stopped")
 

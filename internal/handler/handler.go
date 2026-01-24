@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,22 +11,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
 	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/go-chi/chi"
-	"github.com/jackc/pgx/v5"
 )
 
 type Handlers struct {
 	storage storage.Storage
-	dbConn  *pgx.Conn
 }
 
-func NewHandlers(metricsStorage *storage.MemStorage, dbConn *pgx.Conn) *Handlers {
+func NewHandlers(repo storage.Storage) *Handlers {
 	return &Handlers{
-		storage: metricsStorage,
-		dbConn:  dbConn,
+		storage: repo,
 	}
 }
 
@@ -341,15 +338,10 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 func (h *Handlers) pingHandler(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "text/html")
 
-	if h.dbConn == nil {
-		res.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	err := h.dbConn.Ping(context.Background())
-	if err != nil {
+	if err := db.DB.Ping(); err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	res.WriteHeader(http.StatusOK)
 }
