@@ -2,14 +2,10 @@ package db
 
 import (
 	"database/sql"
-	"encoding/json"
-	"errors"
 	"log"
-	"os"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
-	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 )
 
 type PostgresStorage struct {
@@ -136,71 +132,4 @@ func (p *PostgresStorage) GetAllMetrics() (map[string]float64, map[string]int64)
 	}
 
 	return gauges, counters
-}
-
-func (p *PostgresStorage) LoadFromFile() error {
-	if p.cfg.FileStoragePath == "" || !p.cfg.Restore {
-		return nil
-	}
-
-	if _, err := os.Stat(p.cfg.FileStoragePath); err != nil && errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	path := p.cfg.FileStoragePath
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	var loadedMetrics []models.Metrics
-	if err := json.Unmarshal(data, &loadedMetrics); err != nil {
-		return err
-	}
-
-	for _, metric := range loadedMetrics {
-		mType, ID, value, delta := metric.MType, metric.ID, metric.Value, metric.Delta
-		if mType == "gauge" {
-			p.UpdateGauge(ID, *value)
-		}
-		if mType == "counter" {
-			p.UpdateCounter(ID, *delta)
-		}
-	}
-
-	return nil
-}
-
-func (p *PostgresStorage) SaveToFile() error {
-	path := p.cfg.FileStoragePath
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	var gauges, counters = p.GetAllMetrics()
-	all := make([]models.Metrics, 0, len(gauges)+len(counters))
-	for k, v := range gauges {
-		item := models.Metrics{ID: k, MType: "gauge", Value: &v}
-		all = append(all, item)
-	}
-	for k, v := range counters {
-		item := models.Metrics{ID: k, MType: "counter", Delta: &v}
-		all = append(all, item)
-	}
-
-	bytes, err := json.Marshal(all)
-	if err != nil {
-		log.Printf("Marshal error")
-		return err
-	}
-
-	WriteFileError := os.WriteFile(path, bytes, 0o644)
-	if WriteFileError != nil {
-		log.Printf("os.WriteFile error for path %s", path)
-		return WriteFileError
-	}
-
-	return nil
 }

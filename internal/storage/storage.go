@@ -15,6 +15,4 @@ type Storage interface {
 	GetGauge(name string) (float64, error)
 	GetCounter(name string) (int64, error)
 	GetAllMetrics() (map[string]float64, map[string]int64)
-	LoadFromFile() error
-	SaveToFile() error
 }
