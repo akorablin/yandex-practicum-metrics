@@ -80,7 +80,7 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 	return nil
 }
 
-func (s *Sender) SendAllMetricsJson(gauge map[string]float64, counter map[string]int64) error {
+func (s *Sender) SendAllMetricsJSON(gauge map[string]float64, counter map[string]int64) error {
 	totalMetrics := len(gauge) + len(counter)
 
 	log.Printf("Sending %d gauge metrics and %d counter metrics", len(gauge), len(counter))
