@@ -36,6 +36,7 @@ func (h *Handlers) GetRoutes() http.Handler {
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
 	r.Post("/update/", h.updateMetricJSONHandler)
+	r.Post("/updates/", h.UpdateMetricsBatch)
 	r.Post("/value/", h.valueMetricJSONHandler)
 	r.Get("/ping", h.pingHandler)
 	r.Get("/", h.rootHandler)
@@ -278,6 +279,69 @@ func (h *Handlers) updateMetricJSONHandler(res http.ResponseWriter, req *http.Re
 			return
 		}
 		h.storage.UpdateCounter(m.ID, *m.Delta)
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	res.Write([]byte(`{"status":"ok"}`))
+}
+
+func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(res, "Content-Type must be application/json", http.StatusBadRequest)
+		return
+	}
+
+	var metrics []models.Metrics
+	if err := json.NewDecoder(req.Body).Decode(&metrics); err != nil {
+		res.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(res).Encode(map[string]string{"error": "Invalid JSON format"})
+		return
+	}
+
+	if len(metrics) == 0 {
+		res.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(res).Encode(map[string]string{"error": "Empty batch"})
+		return
+	}
+
+	var validationErrors []string
+	for i, metric := range metrics {
+		if metric.ID == "" {
+			validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: ID is required", i))
+			continue
+		}
+
+		switch metric.MType {
+		case models.Gauge:
+			if metric.Value == nil {
+				validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: gauge value is required", i))
+			}
+		case models.Counter:
+			if metric.Delta == nil {
+				validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: counter delta is required", i))
+			}
+		default:
+			validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: unknown metric type: %s", i, metric.MType))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		res.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(res).Encode(map[string]any{
+			"error":   "validation failed",
+			"details": validationErrors,
+		})
+		return
+	}
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case "gauge":
+			h.storage.UpdateGauge(metric.ID, *metric.Value)
+		case "counter":
+			h.storage.UpdateCounter(metric.ID, *metric.Delta)
+		}
 	}
 
 	res.Header().Set("Content-Type", "application/json")

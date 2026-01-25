@@ -69,4 +69,4 @@ curl -X POST -H "Content-Type: application/json" -H "Accept-Encoding: gzip" -v -
 
 curl -X GET "http://localhost:8080/ping"
 
-[{"id":"Test3","type":"gauge","value":5.3},{"id":"Test4","type":"gauge","value":7},{"id":"Test","type":"counter","delta":2},{"id":"Test2","type":"counter","delta":4}]
+curl -X POST -H "Content-Type: application/json" -d '[{"id":"Test3","type":"gauge","value":5.3},{"id":"Test4","type":"gauge","value":7},{"id":"Test","type":"counter","delta":2},{"id":"Test3","type":"counter","delta":4}]' "http://localhost:8080/updates/" 

@@ -26,27 +26,64 @@ func NewSender(baseURL string) *Sender {
 
 func (s *Sender) SendAllMetrics(gauge map[string]float64, counter map[string]int64) error {
 	totalMetrics := len(gauge) + len(counter)
-	sentMetrics := 0
 
 	log.Printf("Sending %d gauge metrics and %d counter metrics", len(gauge), len(counter))
 
-	// Отправляем все gauge метрики
+	var metricItem models.Metrics
+	data := make([]models.Metrics, 0, totalMetrics)
+
+	// Формируем gauge метрики
 	for name, value := range gauge {
-		if err := s.SendGauge(name, value); err != nil {
-			return fmt.Errorf("failed to send gauge %s: %w", name, err)
+		metricItem = models.Metrics{
+			ID:    name,
+			MType: "gauge",
+			Value: &value,
 		}
-		sentMetrics++
+		data = append(data, metricItem)
 	}
 
 	// Отправляем все counter метрики
 	for name, value := range counter {
-		if err := s.SendCounter(name, value); err != nil {
-			return fmt.Errorf("failed to send counter %s: %w", name, err)
+		metricItem = models.Metrics{
+			ID:    name,
+			MType: "counter",
+			Delta: &value,
 		}
-		sentMetrics++
+		data = append(data, metricItem)
 	}
 
-	log.Printf("Successfully sent %d/%d metrics", sentMetrics, totalMetrics)
+	return s.SendBatchJSON(data)
+}
+
+func (s *Sender) SendBatchJSON(data []models.Metrics) error {
+	url := fmt.Sprintf("%s/updates/", s.baseURL)
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("invalid json: %w", err)
+	}
+
+	return s.sendMetricJSON(url, jsonData)
+}
+
+func (s *Sender) sendMetricJSON(url string, data []byte) error {
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s", string(body))
+	}
+
 	return nil
 }
 
@@ -110,25 +147,4 @@ func (s *Sender) SendCounterJSON(name string, value int64) error {
 	}
 
 	return s.sendMetricJSON(url, jsonData)
-}
-
-func (s *Sender) sendMetricJSON(url string, data []byte) error {
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(body))
-	}
-
-	return nil
 }
