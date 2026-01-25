@@ -80,6 +80,37 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 	return nil
 }
 
+func (s *Sender) SendAllMetricsJSON(gauge map[string]float64, counter map[string]int64) error {
+	totalMetrics := len(gauge) + len(counter)
+
+	log.Printf("Sending %d gauge metrics and %d counter metrics", len(gauge), len(counter))
+
+	var metricItem models.Metrics
+	data := make([]models.Metrics, 0, totalMetrics)
+
+	// Формируем gauge метрики
+	for name, value := range gauge {
+		metricItem = models.Metrics{
+			ID:    name,
+			MType: "gauge",
+			Value: &value,
+		}
+		data = append(data, metricItem)
+	}
+
+	// Отправляем все counter метрики
+	for name, value := range counter {
+		metricItem = models.Metrics{
+			ID:    name,
+			MType: "counter",
+			Delta: &value,
+		}
+		data = append(data, metricItem)
+	}
+
+	return s.SendBatchJSON(data)
+}
+
 func (s *Sender) SendGaugeJSON(name string, value float64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
@@ -104,6 +135,17 @@ func (s *Sender) SendCounterJSON(name string, value int64) error {
 		MType: "counter",
 		Delta: &value,
 	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("invalid json: %w", err)
+	}
+
+	return s.sendMetricJSON(url, jsonData)
+}
+
+func (s *Sender) SendBatchJSON(data []models.Metrics) error {
+	url := fmt.Sprintf("%s/updates/", s.baseURL)
+
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("invalid json: %w", err)
