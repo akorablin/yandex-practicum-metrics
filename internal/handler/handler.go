@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -335,12 +336,23 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 		return
 	}
 
+	ctx := context.Background()
 	for _, metric := range metrics {
 		switch metric.MType {
 		case "gauge":
-			h.storage.UpdateGauge(metric.ID, *metric.Value)
+			err := h.storage.Retry(ctx, func() error {
+				return h.storage.UpdateGauge(metric.ID, *metric.Value)
+			})
+			if err != nil {
+				log.Printf("Failed to update gauge %s after retries: %v", metric.ID, err)
+			}
 		case "counter":
-			h.storage.UpdateCounter(metric.ID, *metric.Delta)
+			err := h.storage.Retry(ctx, func() error {
+				return h.storage.UpdateCounter(metric.ID, *metric.Delta)
+			})
+			if err != nil {
+				log.Printf("Failed to update counter %s after retries: %v", metric.ID, err)
+			}
 		}
 	}
 

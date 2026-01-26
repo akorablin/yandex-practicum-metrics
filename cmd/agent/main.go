@@ -79,8 +79,12 @@ func run() error {
 			case <-ticker.C:
 				gauges := collector.GetGauges()
 				counters := collector.GetCounters()
-				if err := sender.SendAllMetricsJSON(gauges, counters); err != nil {
-					log.Printf("Failed to send metrics: %v", err)
+
+				err := sender.Retry(ctx, func() error {
+					return sender.SendAllMetricsJSON(gauges, counters)
+				})
+				if err != nil {
+					log.Printf("Failed to send metrics after retries: %v", err)
 				} else {
 					log.Printf("Successfully sent all metrics")
 				}

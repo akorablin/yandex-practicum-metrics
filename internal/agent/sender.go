@@ -2,25 +2,43 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 )
 
 type Sender struct {
-	client  *http.Client
-	baseURL string
+	client      *http.Client
+	baseURL     string
+	retryConfig RetryConfig
 }
 
 func NewSender(baseURL string) *Sender {
 	return &Sender{
-		client:  &http.Client{},
-		baseURL: baseURL,
+		client:      &http.Client{},
+		baseURL:     baseURL,
+		retryConfig: DefaultRetryConfig(),
+	}
+}
+
+type RetryConfig struct {
+	MaxAttempts  int
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+}
+
+func DefaultRetryConfig() RetryConfig {
+	return RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Second,
+		MaxDelay:     5 * time.Second,
 	}
 }
 
@@ -78,6 +96,30 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 	}
 
 	return nil
+}
+
+func (s *Sender) Retry(ctx context.Context, operation func() error) error {
+	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+	var lastErr error
+
+	for attempt := 0; attempt < s.retryConfig.MaxAttempts; attempt++ {
+		err := operation()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if attempt < len(delays) {
+			delay := delays[attempt]
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("операция отменена: %w", ctx.Err())
+			case <-time.After(delay):
+			}
+		}
+	}
+
+	return fmt.Errorf("все %d попыток завершились ошибкой, последняя ошибка: %w", s.retryConfig.MaxAttempts, lastErr)
 }
 
 func (s *Sender) SendAllMetricsJSON(gauge map[string]float64, counter map[string]int64) error {

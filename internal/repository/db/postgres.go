@@ -1,26 +1,48 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
+	"github.com/akorablin/yandex-practicum-metrics/internal/repository/db/errors"
 )
 
 type PostgresStorage struct {
-	db  *sql.DB
-	cfg *config.ServerConfig
+	db              *sql.DB
+	cfg             *config.ServerConfig
+	retryConfig     RetryConfig
+	errorClassifier *errors.PostgresErrorClassifier
 }
 
 func New(cfg *config.ServerConfig) *PostgresStorage {
 	return &PostgresStorage{
-		db:  db.GetDB(),
-		cfg: cfg,
+		db:              db.GetDB(),
+		cfg:             cfg,
+		retryConfig:     DefaultRetryConfig(),
+		errorClassifier: errors.NewPostgresErrorClassifier(),
 	}
 }
 
-func (p *PostgresStorage) UpdateGauge(name string, value float64) {
+type RetryConfig struct {
+	MaxAttempts  int
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+}
+
+func DefaultRetryConfig() RetryConfig {
+	return RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Second,
+		MaxDelay:     5 * time.Second,
+	}
+}
+
+func (p *PostgresStorage) UpdateGauge(name string, value float64) error {
 	_, err := p.db.Exec(`
 		INSERT INTO metrics (id, mtype, value, delta) 
 		VALUES ($1, $2, $3, NULL)
@@ -34,9 +56,11 @@ func (p *PostgresStorage) UpdateGauge(name string, value float64) {
 	if err != nil {
 		log.Printf("Ошибка сохранения gauge метрики: %v", err)
 	}
+
+	return err
 }
 
-func (p *PostgresStorage) UpdateCounter(name string, value int64) {
+func (p *PostgresStorage) UpdateCounter(name string, value int64) error {
 	_, err := p.db.Exec(`
 		INSERT INTO metrics (id, mtype, delta, value) 
 		VALUES ($1, $2, $3, NULL)
@@ -50,6 +74,8 @@ func (p *PostgresStorage) UpdateCounter(name string, value int64) {
 	if err != nil {
 		log.Printf("Ошибка сохранения counter метрики: %v", err)
 	}
+
+	return err
 }
 
 func (p *PostgresStorage) GetGauge(name string) (float64, error) {
@@ -132,4 +158,33 @@ func (p *PostgresStorage) GetAllMetrics() (map[string]float64, map[string]int64)
 	}
 
 	return gauges, counters
+}
+
+func (p *PostgresStorage) Retry(ctx context.Context, operation func() error) error {
+	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+	var lastErr error
+
+	for attempt := 0; attempt < p.retryConfig.MaxAttempts; attempt++ {
+		err := operation()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if p.errorClassifier.Classify(err) != errors.Retriable {
+			return fmt.Errorf("неповторяемая ошибка: %w", err)
+		}
+
+		log.Printf("Попытка %d failed, retrying in %v: %v", attempt+1, delays[attempt], err)
+
+		if attempt < len(delays) {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("операция отменена: %w", ctx.Err())
+			case <-time.After(delays[attempt]):
+			}
+		}
+	}
+
+	return fmt.Errorf("все %d попыток завершились с ошибкой, последняя ошибка: %w", p.retryConfig.MaxAttempts, lastErr)
 }
