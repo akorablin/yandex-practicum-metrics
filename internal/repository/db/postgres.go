@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
+	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/repository/db/errors"
 )
 
@@ -76,6 +79,46 @@ func (p *PostgresStorage) UpdateCounter(name string, value int64) error {
 	}
 
 	return err
+}
+
+func (p *PostgresStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	row := ""
+	countAttr := 0
+	rowsSQL := make([]string, 0, len(metrics))
+	argsSQL := make([]any, 0, len(metrics)*4)
+	for _, metric := range metrics {
+		row = "("
+		for i := range 4 {
+			countAttr++
+			row = row + "$" + strconv.Itoa(countAttr)
+			if i < 3 {
+				row = row + ", "
+			}
+		}
+		row = row + ")"
+		rowsSQL = append(rowsSQL, row)
+		argsSQL = append(argsSQL, metric.ID, metric.MType, metric.Value, metric.Delta)
+	}
+	sql := fmt.Sprintf(`INSERT INTO metrics (id, mtype, value, delta) 
+		VALUES %s 
+		ON CONFLICT (id) 
+		DO UPDATE SET 
+			value = EXCLUDED.value,
+			delta = EXCLUDED.delta,
+			updated_at = CURRENT_TIMESTAMP`,
+		strings.Join(rowsSQL, ", "))
+	_, err = tx.Exec(sql, argsSQL...)
+	if err != nil {
+		return fmt.Errorf("ошибка при batch обновлении таблицы: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 func (p *PostgresStorage) GetGauge(name string) (float64, error) {

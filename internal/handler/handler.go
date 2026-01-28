@@ -337,23 +337,11 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 	}
 
 	ctx := context.Background()
-	for _, metric := range metrics {
-		switch metric.MType {
-		case "gauge":
-			err := h.storage.Retry(ctx, func() error {
-				return h.storage.UpdateGauge(metric.ID, *metric.Value)
-			})
-			if err != nil {
-				log.Printf("Failed to update gauge %s after retries: %v", metric.ID, err)
-			}
-		case "counter":
-			err := h.storage.Retry(ctx, func() error {
-				return h.storage.UpdateCounter(metric.ID, *metric.Delta)
-			})
-			if err != nil {
-				log.Printf("Failed to update counter %s after retries: %v", metric.ID, err)
-			}
-		}
+	err := h.storage.Retry(ctx, func() error {
+		return h.storage.UpdateMetricsBatch(metrics)
+	})
+	if err != nil {
+		log.Printf("Failed to update mectrics after retries: %v", err)
 	}
 
 	res.Header().Set("Content-Type", "application/json")

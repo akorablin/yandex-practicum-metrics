@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
+	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 )
 
@@ -48,6 +49,19 @@ func (m *MemStorage) UpdateGauge(name string, value float64) error {
 
 func (m *MemStorage) UpdateCounter(name string, value int64) error {
 	m.counters[name] += value
+	return nil
+}
+
+func (m *MemStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
+	for _, metric := range metrics {
+		switch metric.MType {
+		case "gauge":
+			m.gauges[metric.ID] = *metric.Value
+		case "counter":
+			m.counters[metric.ID] += *metric.Delta
+		}
+	}
+
 	return nil
 }
 
