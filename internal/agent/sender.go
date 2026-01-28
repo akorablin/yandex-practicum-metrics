@@ -2,25 +2,43 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 )
 
 type Sender struct {
-	client  *http.Client
-	baseURL string
+	client      *http.Client
+	baseURL     string
+	retryConfig RetryConfig
 }
 
 func NewSender(baseURL string) *Sender {
 	return &Sender{
-		client:  &http.Client{},
-		baseURL: baseURL,
+		client:      &http.Client{},
+		baseURL:     baseURL,
+		retryConfig: DefaultRetryConfig(),
+	}
+}
+
+type RetryConfig struct {
+	MaxAttempts  int
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+}
+
+func DefaultRetryConfig() RetryConfig {
+	return RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Second,
+		MaxDelay:     5 * time.Second,
 	}
 }
 
@@ -80,6 +98,61 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 	return nil
 }
 
+func (s *Sender) Retry(ctx context.Context, operation func() error) error {
+	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+	var lastErr error
+
+	for attempt := 0; attempt < s.retryConfig.MaxAttempts; attempt++ {
+		err := operation()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if attempt < len(delays) {
+			delay := delays[attempt]
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("операция отменена: %w", ctx.Err())
+			case <-time.After(delay):
+			}
+		}
+	}
+
+	return fmt.Errorf("все %d попыток завершились ошибкой, последняя ошибка: %w", s.retryConfig.MaxAttempts, lastErr)
+}
+
+func (s *Sender) SendAllMetricsJSON(gauge map[string]float64, counter map[string]int64) error {
+	totalMetrics := len(gauge) + len(counter)
+
+	log.Printf("Sending %d gauge metrics and %d counter metrics", len(gauge), len(counter))
+
+	var metricItem models.Metrics
+	data := make([]models.Metrics, 0, totalMetrics)
+
+	// Формируем gauge метрики
+	for name, value := range gauge {
+		metricItem = models.Metrics{
+			ID:    name,
+			MType: "gauge",
+			Value: &value,
+		}
+		data = append(data, metricItem)
+	}
+
+	// Отправляем все counter метрики
+	for name, value := range counter {
+		metricItem = models.Metrics{
+			ID:    name,
+			MType: "counter",
+			Delta: &value,
+		}
+		data = append(data, metricItem)
+	}
+
+	return s.SendBatchJSON(data)
+}
+
 func (s *Sender) SendGaugeJSON(name string, value float64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
@@ -104,6 +177,17 @@ func (s *Sender) SendCounterJSON(name string, value int64) error {
 		MType: "counter",
 		Delta: &value,
 	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("invalid json: %w", err)
+	}
+
+	return s.sendMetricJSON(url, jsonData)
+}
+
+func (s *Sender) SendBatchJSON(data []models.Metrics) error {
+	url := fmt.Sprintf("%s/updates/", s.baseURL)
+
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("invalid json: %w", err)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
 	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
@@ -21,18 +23,23 @@ type Handlers struct {
 	storage storage.Storage
 }
 
-func NewHandlers(metricsStorage *storage.MemStorage) *Handlers {
-	return &Handlers{storage: metricsStorage}
+func NewHandlers(repo storage.Storage) *Handlers {
+	return &Handlers{
+		storage: repo,
+	}
 }
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.GzipMiddleware)
+	r.Use(middleware.WithLogging)
 
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
 	r.Post("/update/", h.updateMetricJSONHandler)
+	r.Post("/updates/", h.UpdateMetricsBatch)
 	r.Post("/value/", h.valueMetricJSONHandler)
+	r.Get("/ping", h.pingHandler)
 	r.Get("/", h.rootHandler)
 
 	return r
@@ -206,7 +213,8 @@ func (h *Handlers) rootHandler(res http.ResponseWriter, req *http.Request) {
                 <li><code>POST /update/{type}/{name}/{value}- Update metric</code> </li>
                 <li><code>GET /value/{type}/{name} - Get metric value</code></li>
 				<li><code>POST /update - Update metric (JSON)</code></li>
-                <li><code>GET /value - Get metric value (JSON)</code></li>                
+                <li><code>GET /value - Get metric value (JSON)</code></li>
+				<li><code>GET /ping - Ping DB</code></li>
 				<li><code>GET / - This dashboard</code></li>
             </ul>
         </div>
@@ -279,6 +287,68 @@ func (h *Handlers) updateMetricJSONHandler(res http.ResponseWriter, req *http.Re
 	res.Write([]byte(`{"status":"ok"}`))
 }
 
+func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(res, "Content-Type must be application/json", http.StatusBadRequest)
+		return
+	}
+
+	var metrics []models.Metrics
+	if err := json.NewDecoder(req.Body).Decode(&metrics); err != nil {
+		res.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(res).Encode(map[string]string{"error": "Invalid JSON format"})
+		return
+	}
+
+	if len(metrics) == 0 {
+		res.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(res).Encode(map[string]string{"error": "Empty batch"})
+		return
+	}
+
+	var validationErrors []string
+	for i, metric := range metrics {
+		if metric.ID == "" {
+			validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: ID is required", i))
+			continue
+		}
+
+		switch metric.MType {
+		case models.Gauge:
+			if metric.Value == nil {
+				validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: gauge value is required", i))
+			}
+		case models.Counter:
+			if metric.Delta == nil {
+				validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: counter delta is required", i))
+			}
+		default:
+			validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: unknown metric type: %s", i, metric.MType))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		res.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(res).Encode(map[string]any{
+			"error":   "validation failed",
+			"details": validationErrors,
+		})
+		return
+	}
+
+	ctx := context.Background()
+	err := h.storage.Retry(ctx, func() error {
+		return h.storage.UpdateMetricsBatch(metrics)
+	})
+	if err != nil {
+		log.Printf("Failed to update mectrics after retries: %v", err)
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	res.Write([]byte(`{"status":"ok"}`))
+}
+
 func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Content-Type") != "application/json" {
 		http.Error(res, "Content-Type must be application/json", http.StatusBadRequest)
@@ -328,4 +398,15 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
 	res.Write(jsonResp)
+}
+
+func (h *Handlers) pingHandler(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Content-Type", "text/html")
+
+	if err := db.DB.Ping(); err != nil {
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
 }
