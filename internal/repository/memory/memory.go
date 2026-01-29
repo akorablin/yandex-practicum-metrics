@@ -58,7 +58,7 @@ func (m *MemStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
 		case "gauge":
 			m.gauges[metric.ID] = *metric.Value
 		case "counter":
-			m.counters[metric.ID] += *metric.Delta
+			m.counters[metric.ID] = *metric.Delta
 		}
 	}
 
