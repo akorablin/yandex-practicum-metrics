@@ -293,6 +293,7 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 		return
 	}
 
+	// Получаем метрики из тела запроса
 	var metrics []models.Metrics
 	if err := json.NewDecoder(req.Body).Decode(&metrics); err != nil {
 		res.WriteHeader(http.StatusBadRequest)
@@ -300,12 +301,14 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 		return
 	}
 
+	// Проверяем количество метрик на пустоту
 	if len(metrics) == 0 {
 		res.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(res).Encode(map[string]string{"error": "Empty batch"})
 		return
 	}
 
+	// Валидация метрик
 	var validationErrors []string
 	for i, metric := range metrics {
 		if metric.ID == "" {
@@ -326,7 +329,6 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 			validationErrors = append(validationErrors, fmt.Sprintf("metric[%d]: unknown metric type: %s", i, metric.MType))
 		}
 	}
-
 	if len(validationErrors) > 0 {
 		res.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(res).Encode(map[string]any{
@@ -336,14 +338,29 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 		return
 	}
 
+	// Удаляем дубликаты метрик
+	uniqueMetrics := []models.Metrics{}
+	uniqueIndex := make(map[string]int)
+	for i, metric := range metrics {
+		uniqueIndex[metric.ID] = i
+	}
+	for i, metric := range metrics {
+		uniquekey := uniqueIndex[metric.ID]
+		if uniquekey == i {
+			uniqueMetrics = append(uniqueMetrics, metric)
+		}
+	}
+
+	// Сохранение метрик
 	ctx := context.Background()
 	err := h.storage.Retry(ctx, func() error {
-		return h.storage.UpdateMetricsBatch(metrics)
+		return h.storage.UpdateMetricsBatch(uniqueMetrics)
 	})
 	if err != nil {
 		log.Printf("Failed to update mectrics after retries: %v", err)
 	}
 
+	// Ответ
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
 	res.Write([]byte(`{"status":"ok"}`))
