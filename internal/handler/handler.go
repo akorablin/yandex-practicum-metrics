@@ -341,15 +341,15 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 	// Удаляем дубликаты метрик и сразу суммируем counters
 	uniqueMetrics := []models.Metrics{}
 	uniqueKeys := make(map[string]int)
-	uniqueGaugeValues := make(map[string]*float64)
-	uniqueCounterValues := make(map[string]*int64)
+	uniqueGaugeValues := make(map[string]float64)
+	uniqueCounterValues := make(map[string]int64)
 	for i, metric := range metrics {
 		uniqueKeys[metric.ID] = i
 		switch metric.MType {
 		case models.Gauge:
-			uniqueGaugeValues[metric.ID] = metric.Value
+			uniqueGaugeValues[metric.ID] = *metric.Value
 		case models.Counter:
-			*uniqueCounterValues[metric.ID] += *metric.Delta
+			uniqueCounterValues[metric.ID] += *metric.Delta
 		}
 	}
 	for i, metric := range metrics {
@@ -357,9 +357,9 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 		if ui == i {
 			switch metric.MType {
 			case models.Gauge:
-				metric.Value = uniqueGaugeValues[metric.ID]
+				*metric.Value = uniqueGaugeValues[metric.ID]
 			case models.Counter:
-				metric.Delta = uniqueCounterValues[metric.ID]
+				*metric.Delta = uniqueCounterValues[metric.ID]
 			}
 			uniqueMetrics = append(uniqueMetrics, metric)
 		}
