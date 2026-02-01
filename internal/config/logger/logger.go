@@ -7,7 +7,7 @@ import (
 )
 
 func Initialize(level string) (*zap.Logger, error) {
-	var Log *zap.Logger = zap.NewNop()
+	var Log = zap.NewNop()
 
 	// Преобразуем текстовый уровень логирования в zap.AtomicLevel
 	lvl, err := zap.ParseAtomicLevel(level)

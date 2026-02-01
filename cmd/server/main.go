@@ -39,7 +39,7 @@ func run() error {
 	// Инициализируем логирование
 	var Log *zap.Logger
 	if Log, err = logger.Initialize(cfg.LogLevel); err != nil {
-		return fmt.Errorf("Ошибка инициализации логирования: %w", err)
+		return fmt.Errorf("ошибка инициализации логирования: %w", err)
 	}
 
 	// Инициализируем хранилище (БД или оперативная память)
