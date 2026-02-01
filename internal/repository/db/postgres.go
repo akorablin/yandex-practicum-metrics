@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
-	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/repository/db/errors"
 )
@@ -22,9 +21,9 @@ type PostgresStorage struct {
 	errorClassifier *errors.PostgresErrorClassifier
 }
 
-func New(cfg *config.ServerConfig) *PostgresStorage {
+func New(cfg *config.ServerConfig, db *sql.DB) *PostgresStorage {
 	return &PostgresStorage{
-		db:              db.GetDB(),
+		db:              db,
 		cfg:             cfg,
 		retryConfig:     DefaultRetryConfig(),
 		errorClassifier: errors.NewPostgresErrorClassifier(),

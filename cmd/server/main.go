@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
-	db "github.com/akorablin/yandex-practicum-metrics/internal/config/db"
+	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
 	logger "github.com/akorablin/yandex-practicum-metrics/internal/config/logger"
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
 	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
@@ -40,25 +41,23 @@ func run() error {
 		return err
 	}
 
-	var repo storage.Storage
-	var useDB bool
-
 	// Инициализируем хранилище
+	var repo storage.Storage
+	var DB *sql.DB
 	logger.Log.Info("Подключение к БД", zap.String("DataBaseDSN", cfg.DataBaseDSN))
-	if err := db.Init(cfg.DataBaseDSN); err != nil {
-		useDB = false
+	if DB, err = db.Init(cfg.DataBaseDSN); err != nil {
 		log.Printf("БД недоступна: %v", err)
 		repo = memoryStorage.New(cfg)
 	} else {
-		useDB = true
 		log.Printf("БД доступна!")
-		repo = dbStorage.New(cfg)
+		repo = dbStorage.New(cfg, DB)
+		defer DB.Close()
 	}
 
 	// Инициализируем обработчики запросов
-	handlers := handler.NewHandlers(repo)
+	handlers := handler.NewHandlers(repo, DB)
 
-	// Инициализируем структуру для рабоыт с файлом
+	// Инициализируем структуру для работы с файлом
 	file := fileStorage.New(cfg, repo)
 
 	// Загруженам метрики из файла
@@ -116,9 +115,6 @@ func run() error {
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed to stop server: %v", err)
-	}
-	if useDB {
-		db.DB.Close()
 	}
 	logger.Log.Info("Server stopped")
 

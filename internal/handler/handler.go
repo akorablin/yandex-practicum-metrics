@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
 	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
@@ -21,11 +21,13 @@ import (
 
 type Handlers struct {
 	storage storage.Storage
+	db      *sql.DB
 }
 
-func NewHandlers(repo storage.Storage) *Handlers {
+func NewHandlers(repo storage.Storage, db *sql.DB) *Handlers {
 	return &Handlers{
 		storage: repo,
+		db:      db,
 	}
 }
 
@@ -434,7 +436,12 @@ func (h *Handlers) valueMetricJSONHandler(res http.ResponseWriter, req *http.Req
 func (h *Handlers) pingHandler(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "text/html")
 
-	if err := db.DB.Ping(); err != nil {
+	if h.db == nil {
+		http.Error(res, "БД недоступна!", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.db.Ping(); err != nil {
 		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
