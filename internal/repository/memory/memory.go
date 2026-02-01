@@ -2,10 +2,7 @@ package memory
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"maps"
-	"time"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
@@ -13,32 +10,16 @@ import (
 )
 
 type MemStorage struct {
-	gauges      map[string]float64
-	counters    map[string]int64
-	cfg         *config.ServerConfig
-	retryConfig RetryConfig
+	gauges   map[string]float64
+	counters map[string]int64
+	cfg      *config.ServerConfig
 }
 
 func New(cfg *config.ServerConfig) *MemStorage {
 	return &MemStorage{
-		gauges:      make(map[string]float64),
-		counters:    make(map[string]int64),
-		cfg:         cfg,
-		retryConfig: DefaultRetryConfig(),
-	}
-}
-
-type RetryConfig struct {
-	MaxAttempts  int
-	InitialDelay time.Duration
-	MaxDelay     time.Duration
-}
-
-func DefaultRetryConfig() RetryConfig {
-	return RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 1 * time.Second,
-		MaxDelay:     5 * time.Second,
+		gauges:   make(map[string]float64),
+		counters: make(map[string]int64),
+		cfg:      cfg,
 	}
 }
 
@@ -52,7 +33,7 @@ func (m *MemStorage) UpdateCounter(name string, value int64) error {
 	return nil
 }
 
-func (m *MemStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
+func (m *MemStorage) UpdateMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
 		case "gauge":
@@ -89,29 +70,4 @@ func (m *MemStorage) GetAllMetrics() (map[string]float64, map[string]int64) {
 	maps.Copy(countersCopy, m.counters)
 
 	return gaugesCopy, countersCopy
-}
-
-func (m *MemStorage) Retry(ctx context.Context, operation func() error) error {
-	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
-	var lastErr error
-
-	for attempt := 0; attempt < m.retryConfig.MaxAttempts; attempt++ {
-		err := operation()
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-
-		log.Printf("Попытка %d failed, retrying in %v: %v", attempt+1, delays[attempt], err)
-
-		if attempt < len(delays) {
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("операция отменена: %w", ctx.Err())
-			case <-time.After(delays[attempt]):
-			}
-		}
-	}
-
-	return fmt.Errorf("все %d попыток завершились с ошибкой, последняя ошибка: %w", m.retryConfig.MaxAttempts, lastErr)
 }

@@ -369,9 +369,7 @@ func (h *Handlers) UpdateMetricsBatch(res http.ResponseWriter, req *http.Request
 
 	// Сохранение метрик
 	ctx := context.Background()
-	err := h.storage.Retry(ctx, func() error {
-		return h.storage.UpdateMetricsBatch(uniqueMetrics)
-	})
+	err := h.storage.UpdateMetricsBatch(ctx, uniqueMetrics)
 	if err != nil {
 		log.Printf("Failed to update mectrics after retries: %v", err)
 	}

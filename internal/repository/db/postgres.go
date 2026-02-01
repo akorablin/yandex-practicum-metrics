@@ -33,14 +33,14 @@ func New(cfg *config.ServerConfig, db *sql.DB) *PostgresStorage {
 type RetryConfig struct {
 	MaxAttempts  int
 	InitialDelay time.Duration
-	MaxDelay     time.Duration
+	DelayStep    time.Duration
 }
 
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 1 * time.Second,
-		MaxDelay:     5 * time.Second,
+		DelayStep:    2 * time.Second,
 	}
 }
 
@@ -80,7 +80,7 @@ func (p *PostgresStorage) UpdateCounter(name string, value int64) error {
 	return err
 }
 
-func (p *PostgresStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
+func (p *PostgresStorage) UpdateMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
@@ -112,7 +112,7 @@ func (p *PostgresStorage) UpdateMetricsBatch(metrics []models.Metrics) error {
 			delta = EXCLUDED.delta,
 			updated_at = CURRENT_TIMESTAMP`,
 		strings.Join(rowsSQL, ", "))
-	_, err = tx.Exec(sql, argsSQL...)
+	err = p.retryExec(ctx, tx, sql, argsSQL...)
 	if err != nil {
 		return fmt.Errorf("ошибка при batch обновлении таблицы: %w", err)
 	}
@@ -202,12 +202,10 @@ func (p *PostgresStorage) GetAllMetrics() (map[string]float64, map[string]int64)
 	return gauges, counters
 }
 
-func (p *PostgresStorage) Retry(ctx context.Context, operation func() error) error {
-	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+func (p *PostgresStorage) retryExec(ctx context.Context, tx *sql.Tx, sql string, argsSQL ...any) error {
 	var lastErr error
-
 	for attempt := 0; attempt < p.retryConfig.MaxAttempts; attempt++ {
-		err := operation()
+		_, err := tx.Exec(sql, argsSQL...)
 		if err == nil {
 			return nil
 		}
@@ -217,14 +215,13 @@ func (p *PostgresStorage) Retry(ctx context.Context, operation func() error) err
 			return fmt.Errorf("неповторяемая ошибка: %w", err)
 		}
 
-		log.Printf("Попытка %d failed, retrying in %v: %v", attempt+1, delays[attempt], err)
+		log.Printf("Попытка %d завершилась ошибкой: %v", attempt+1, err)
 
-		if attempt < len(delays) {
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("операция отменена: %w", ctx.Err())
-			case <-time.After(delays[attempt]):
-			}
+		delay := p.retryConfig.InitialDelay + (time.Duration(attempt) * p.retryConfig.DelayStep)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("операция отменена: %w", ctx.Err())
+		case <-time.After(delay):
 		}
 	}
 
