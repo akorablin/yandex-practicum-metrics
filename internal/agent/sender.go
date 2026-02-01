@@ -31,14 +31,14 @@ func NewSender(baseURL string) *Sender {
 type RetryConfig struct {
 	MaxAttempts  int
 	InitialDelay time.Duration
-	MaxDelay     time.Duration
+	DelayStep    time.Duration
 }
 
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 1 * time.Second,
-		MaxDelay:     5 * time.Second,
+		DelayStep:    2 * time.Second,
 	}
 }
 
@@ -98,31 +98,7 @@ func (s *Sender) sendMetric(url, metricType, metricName string) error {
 	return nil
 }
 
-func (s *Sender) Retry(ctx context.Context, operation func() error) error {
-	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
-	var lastErr error
-
-	for attempt := 0; attempt < s.retryConfig.MaxAttempts; attempt++ {
-		err := operation()
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-
-		if attempt < len(delays) {
-			delay := delays[attempt]
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("операция отменена: %w", ctx.Err())
-			case <-time.After(delay):
-			}
-		}
-	}
-
-	return fmt.Errorf("все %d попыток завершились ошибкой, последняя ошибка: %w", s.retryConfig.MaxAttempts, lastErr)
-}
-
-func (s *Sender) SendAllMetricsJSON(gauge map[string]float64, counter map[string]int64) error {
+func (s *Sender) SendAllMetricsJSON(ctx context.Context, gauge map[string]float64, counter map[string]int64) error {
 	totalMetrics := len(gauge) + len(counter)
 
 	log.Printf("Sending %d gauge metrics and %d counter metrics", len(gauge), len(counter))
@@ -150,10 +126,10 @@ func (s *Sender) SendAllMetricsJSON(gauge map[string]float64, counter map[string
 		data = append(data, metricItem)
 	}
 
-	return s.SendBatchJSON(data)
+	return s.SendBatchJSON(ctx, data)
 }
 
-func (s *Sender) SendGaugeJSON(name string, value float64) error {
+func (s *Sender) SendGaugeJSON(ctx context.Context, name string, value float64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
 	data := models.Metrics{
@@ -166,10 +142,10 @@ func (s *Sender) SendGaugeJSON(name string, value float64) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetricJSON(url, jsonData)
+	return s.sendMetricJSON(ctx, url, jsonData)
 }
 
-func (s *Sender) SendCounterJSON(name string, value int64) error {
+func (s *Sender) SendCounterJSON(ctx context.Context, name string, value int64) error {
 	url := fmt.Sprintf("%s/update", s.baseURL)
 
 	data := models.Metrics{
@@ -182,10 +158,10 @@ func (s *Sender) SendCounterJSON(name string, value int64) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetricJSON(url, jsonData)
+	return s.sendMetricJSON(ctx, url, jsonData)
 }
 
-func (s *Sender) SendBatchJSON(data []models.Metrics) error {
+func (s *Sender) SendBatchJSON(ctx context.Context, data []models.Metrics) error {
 	url := fmt.Sprintf("%s/updates/", s.baseURL)
 
 	jsonData, err := json.Marshal(data)
@@ -193,17 +169,17 @@ func (s *Sender) SendBatchJSON(data []models.Metrics) error {
 		return fmt.Errorf("invalid json: %w", err)
 	}
 
-	return s.sendMetricJSON(url, jsonData)
+	return s.sendMetricJSON(ctx, url, jsonData)
 }
 
-func (s *Sender) sendMetricJSON(url string, data []byte) error {
+func (s *Sender) sendMetricJSON(ctx context.Context, url string, data []byte) error {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.client.Do(req)
+	resp, err := s.retryRequest(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -215,4 +191,24 @@ func (s *Sender) sendMetricJSON(url string, data []byte) error {
 	}
 
 	return nil
+}
+
+func (s *Sender) retryRequest(ctx context.Context, request *http.Request) (*http.Response, error) {
+	var lastErr error
+	for attempt := 0; attempt < s.retryConfig.MaxAttempts; attempt++ {
+		resp, err := s.client.Do(request)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+
+		delay := s.retryConfig.InitialDelay + (time.Duration(attempt) * s.retryConfig.DelayStep)
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("операция отменена: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+
+	return nil, fmt.Errorf("все %d попыток завершились ошибкой, последняя ошибка: %w", s.retryConfig.MaxAttempts, lastErr)
 }
