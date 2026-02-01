@@ -17,24 +17,27 @@ import (
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
 	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 )
 
 type Handlers struct {
 	storage storage.Storage
 	db      *sql.DB
+	logger  *zap.Logger
 }
 
-func NewHandlers(repo storage.Storage, db *sql.DB) *Handlers {
+func NewHandlers(repo storage.Storage, db *sql.DB, logger *zap.Logger) *Handlers {
 	return &Handlers{
 		storage: repo,
 		db:      db,
+		logger:  logger,
 	}
 }
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.GzipMiddleware)
-	r.Use(middleware.WithLogging)
+	r.Use(middleware.Logging(*h.logger))
 
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)

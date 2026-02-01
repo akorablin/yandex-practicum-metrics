@@ -13,13 +13,13 @@ import (
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 	"github.com/akorablin/yandex-practicum-metrics/internal/config/db"
-	logger "github.com/akorablin/yandex-practicum-metrics/internal/config/logger"
+	"github.com/akorablin/yandex-practicum-metrics/internal/config/logger"
 	"github.com/akorablin/yandex-practicum-metrics/internal/handler"
 	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
-	dbStorage "github.com/akorablin/yandex-practicum-metrics/internal/repository/db"
-	fileStorage "github.com/akorablin/yandex-practicum-metrics/internal/repository/file"
-	memoryStorage "github.com/akorablin/yandex-practicum-metrics/internal/repository/memory"
+	dbRepo "github.com/akorablin/yandex-practicum-metrics/internal/repository/db"
+	memoryRepo "github.com/akorablin/yandex-practicum-metrics/internal/repository/memory"
 	"github.com/akorablin/yandex-practicum-metrics/internal/storage"
+	fileStorage "github.com/akorablin/yandex-practicum-metrics/internal/storage/file"
 	"go.uber.org/zap"
 )
 
@@ -36,37 +36,36 @@ func run() error {
 		return fmt.Errorf("error parsing flags: %w", err)
 	}
 
-	// Создаем "singleton" логирования
-	if err := logger.Initialize(cfg.LogLevel); err != nil {
-		return err
+	// Инициализируем логирование
+	var Log *zap.Logger
+	if Log, err = logger.Initialize(cfg.LogLevel); err != nil {
+		return fmt.Errorf("Ошибка инициализации логирования: %w", err)
 	}
 
-	// Инициализируем хранилище
-	var repo storage.Storage
+	// Инициализируем хранилище (БД или оперативная память)
 	var DB *sql.DB
-	logger.Log.Info("Подключение к БД", zap.String("DataBaseDSN", cfg.DataBaseDSN))
+	var repo storage.Storage
+	log.Printf("Подключение к БД: %s", cfg.DataBaseDSN)
 	if DB, err = db.Init(cfg.DataBaseDSN); err != nil {
 		log.Printf("БД недоступна: %v", err)
-		repo = memoryStorage.New(cfg)
+		repo = memoryRepo.New(cfg)
 	} else {
 		log.Printf("БД доступна!")
-		repo = dbStorage.New(cfg, DB)
+		repo = dbRepo.New(cfg, DB)
 		defer DB.Close()
 	}
 
 	// Инициализируем обработчики запросов
-	handlers := handler.NewHandlers(repo, DB)
-
-	// Инициализируем структуру для работы с файлом
-	file := fileStorage.New(cfg, repo)
+	handlers := handler.NewHandlers(repo, DB, Log)
 
 	// Загруженам метрики из файла
+	file := fileStorage.New(cfg, repo)
 	loadFileError := file.Load()
 	if loadFileError != nil {
 		return loadFileError
 	}
 
-	// Инициализируем обработчики запросов
+	// Получаем роутинг
 	r := handlers.GetRoutes()
 
 	// Обновление метрик
@@ -101,7 +100,7 @@ func run() error {
 			log.Fatalf("Failed start server: %v", err)
 		}
 	}()
-	logger.Log.Info("Server started")
+	log.Println("Server started")
 	log.Println("Server is running. Press Ctrl+C to stop.")
 
 	// Отключаем сервер
@@ -116,7 +115,7 @@ func run() error {
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed to stop server: %v", err)
 	}
-	logger.Log.Info("Server stopped")
+	log.Println("Server stopped")
 
 	return nil
 }

@@ -6,27 +6,26 @@ import (
 	"go.uber.org/zap"
 )
 
-var Log *zap.Logger = zap.NewNop()
+func Initialize(level string) (*zap.Logger, error) {
+	var Log *zap.Logger = zap.NewNop()
 
-func Initialize(level string) error {
-	// преобразуем текстовый уровень логирования в zap.AtomicLevel
+	// Преобразуем текстовый уровень логирования в zap.AtomicLevel
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
-		return fmt.Errorf("не удалось определить уровень логирования: %v", err)
+		return nil, fmt.Errorf("не удалось определить уровень логирования: %v", err)
 	}
 
-	// создаём новую конфигурацию логера
+	// Создаём новую конфигурацию логера
 	cfg := zap.NewDevelopmentConfig()
 
-	// устанавливаем уровень
+	// Устанавливаем уровень
 	cfg.Level = lvl
 
-	// создаём логер на основе конфигурации
-	zl, err := cfg.Build()
+	// Создаём логер на основе конфигурации
+	Log, err = cfg.Build()
 	if err != nil {
-		return fmt.Errorf("не удалось создать логгер: %v", err)
+		return nil, fmt.Errorf("не удалось создать логгер: %v", err)
 	}
 
-	Log = zl
-	return nil
+	return Log, nil
 }

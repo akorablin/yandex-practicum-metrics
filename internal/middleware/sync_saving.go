@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/akorablin/yandex-practicum-metrics/internal/repository/file"
+	"github.com/akorablin/yandex-practicum-metrics/internal/storage/file"
 )
 
 type responseWriter struct {
