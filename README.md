@@ -51,8 +51,8 @@ http://localhost:8080/update/test
 http://localhost:8080/update
 
 ## Запуск с параметрами по умолчанию
-go run cmd/server/main.go -l debug
-go run cmd/agent/main.go
+go run cmd/server/main.go -l debug -k "test"
+go run cmd/agent/main.go -k "test"
 export DATABASE_DSN="host=localhost user=admin password=*** dbname=practicum sslmode=disable"
 
 ## Для отладки - тестовый запрос через curl

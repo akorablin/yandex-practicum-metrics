@@ -33,9 +33,9 @@ func run() error {
 	// Создаем "отправщик" метрик
 	serverURL := cfg.Address
 	if !strings.Contains(serverURL, "http://") && !strings.Contains(serverURL, "https://") {
-		serverURL = "http://" + serverURL
+		cfg.Address = "http://" + serverURL
 	}
-	sender := agent.NewSender(serverURL)
+	sender := agent.NewSender(cfg)
 
 	// Запускаем агент
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

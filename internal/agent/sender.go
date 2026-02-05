@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/akorablin/yandex-practicum-metrics/internal/config"
+	"github.com/akorablin/yandex-practicum-metrics/internal/middleware"
 	models "github.com/akorablin/yandex-practicum-metrics/internal/model"
 )
 
@@ -18,13 +20,15 @@ type Sender struct {
 	client      *http.Client
 	baseURL     string
 	retryConfig RetryConfig
+	hashKey     string
 }
 
-func NewSender(baseURL string) *Sender {
+func NewSender(cfg *config.AgentConfig) *Sender {
 	return &Sender{
 		client:      &http.Client{},
-		baseURL:     baseURL,
+		baseURL:     cfg.Address,
 		retryConfig: DefaultRetryConfig(),
+		hashKey:     cfg.HashKey,
 	}
 }
 
@@ -179,6 +183,9 @@ func (s *Sender) sendMetricJSON(ctx context.Context, url string, data []byte) er
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	if s.hashKey != "" {
+		req.Header.Set("HashSHA256", middleware.GetHash(data, s.hashKey))
+	}
 	resp, err := s.retryRequest(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
