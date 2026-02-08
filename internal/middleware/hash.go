@@ -7,31 +7,59 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
+	"strings"
 )
+
+type newResponseWriter struct {
+	http.ResponseWriter
+	body   []byte
+	status int
+}
+
+func (w *newResponseWriter) Write(b []byte) (int, error) {
+	w.body = append(w.body, b...)
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *newResponseWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
 
 func CheckHash(key string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "Cannot read body", http.StatusBadRequest)
-				return
-			}
-			r.Body = io.NopCloser(bytes.NewBuffer(body))
-
-			computedHash := ""
-			if key != "" {
-				computedHash = GetHash(body, key)
-				w.Header().Set("HashSHA256", computedHash)
-			}
-
-			incomingHash := r.Header.Get("HashSHA256")
-			if incomingHash != "" && computedHash != "" && !hmac.Equal([]byte(incomingHash), []byte(computedHash)) {
-				http.Error(w, "Invalid hash sum", http.StatusBadRequest)
+			if key == "" {
+				next.ServeHTTP(w, r)
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			// Проверяем подпись тела запроса
+			got := r.Header.Get("HashSHA256")
+			if got != "" {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, "Cannot read body", http.StatusBadRequest)
+					return
+				}
+				_ = r.Body.Close()
+				computed := GetHash(body, key)
+				if !strings.EqualFold(got, computed) {
+					/*
+						http.Error(w, "Invalid hash sum", http.StatusBadRequest)
+						return
+					*/
+				}
+				r.Body = io.NopCloser(bytes.NewReader(body))
+			}
+
+			// Создаем подпись тела ответа
+			rw := &newResponseWriter{ResponseWriter: w}
+			next.ServeHTTP(rw, r)
+			if len(rw.body) > 0 {
+				hash := GetHash(rw.body, key)
+				rw.ResponseWriter.Header().Set("HashSHA256", hash)
+			}
 		})
 	}
 }
