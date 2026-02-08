@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
-	"strings"
 )
 
 type newResponseWriter struct {
@@ -43,13 +42,13 @@ func CheckHash(key string) func(http.Handler) http.Handler {
 					return
 				}
 				_ = r.Body.Close()
-				computed := GetHash(body, key)
-				if !strings.EqualFold(got, computed) {
-					/*
-						http.Error(w, "Invalid hash sum", http.StatusBadRequest)
-						return
-					*/
-				}
+				/*
+					computed := GetHash(body, key)
+					if !strings.EqualFold(got, computed) {
+							http.Error(w, "Invalid hash sum", http.StatusBadRequest)
+							return
+					}
+				*/
 				r.Body = io.NopCloser(bytes.NewReader(body))
 			}
 
