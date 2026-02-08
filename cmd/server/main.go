@@ -56,7 +56,7 @@ func run() error {
 	}
 
 	// Инициализируем обработчики запросов
-	handlers := handler.NewHandlers(repo, DB, Log)
+	handlers := handler.NewHandlers(repo, DB, Log, cfg.HashKey)
 
 	// Загруженам метрики из файла
 	file := fileStorage.New(cfg, repo)
