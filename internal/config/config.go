@@ -23,6 +23,7 @@ type AgentConfig struct {
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 	HashKey        string
+	RateLimit      int
 }
 
 func getEnvOrDefaultString(envVar string, defaultValue string) string {
@@ -118,6 +119,7 @@ func GetAgentConfig() (*AgentConfig, error) {
 		PollInterval:   getEnvOrDefaultTimeDuration("POLL_INTERVAL", 2*time.Second),
 		ReportInterval: getEnvOrDefaultTimeDuration("REPORT_INTERVAL", 10*time.Second),
 		HashKey:        getEnvOrDefaultString("KEY", ""),
+		RateLimit:      getEnvOrDefaultInt("RATE_LIMIT", 1),
 	}
 
 	// Настройки из командной строки
@@ -125,6 +127,7 @@ func GetAgentConfig() (*AgentConfig, error) {
 	pollInterval := flag.Int("p", int(cfg.PollInterval.Seconds()), "poll interval")
 	reportInterval := flag.Int("r", int(cfg.ReportInterval.Seconds()), "report interval")
 	hashKey := flag.String("k", cfg.HashKey, "hash key")
+	rateLimit := flag.Int("l", cfg.RateLimit, "rate limit")
 	flag.Parse()
 
 	// Валидация командной строки
@@ -142,18 +145,24 @@ func GetAgentConfig() (*AgentConfig, error) {
 		fmt.Fprintf(os.Stderr, "Error: report interval must be positive, got %d\n", *reportInterval)
 		return nil, fmt.Errorf("incorrect reportInterval")
 	}
+	if *rateLimit <= 0 {
+		fmt.Fprintf(os.Stderr, "Error: rate limit must be positive, got %d\n", *rateLimit)
+		return nil, fmt.Errorf("incorrect rateLimit")
+	}
 
 	// Сохраняем настройки
 	cfg.Address = *serverAddress
 	cfg.PollInterval = time.Duration(*pollInterval) * time.Second
 	cfg.ReportInterval = time.Duration(*reportInterval) * time.Second
 	cfg.HashKey = *hashKey
+	cfg.RateLimit = *rateLimit
 
 	// Отображение настроек
 	fmt.Println("Server Address:", cfg.Address)
 	fmt.Println("Poll Level:", cfg.PollInterval)
 	fmt.Println("Report Interval:", cfg.ReportInterval)
 	fmt.Println("HashKey:", cfg.HashKey)
+	fmt.Println("RateLimit:", cfg.RateLimit)
 	fmt.Println("---------------")
 
 	return cfg, nil
