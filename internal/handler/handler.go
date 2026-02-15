@@ -24,20 +24,23 @@ type Handlers struct {
 	storage storage.Storage
 	db      *sql.DB
 	logger  *zap.Logger
+	hashKey string
 }
 
-func NewHandlers(repo storage.Storage, db *sql.DB, logger *zap.Logger) *Handlers {
+func NewHandlers(repo storage.Storage, db *sql.DB, logger *zap.Logger, hashKey string) *Handlers {
 	return &Handlers{
 		storage: repo,
 		db:      db,
 		logger:  logger,
+		hashKey: hashKey,
 	}
 }
 
 func (h *Handlers) GetRoutes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.GzipMiddleware)
+	r.Use(middleware.Gzip)
 	r.Use(middleware.Logging(*h.logger))
+	r.Use(middleware.CheckHash(h.hashKey))
 
 	r.Post("/update/{type}/{name}/{value}", h.updateHandler)
 	r.Get("/value/{type}/{name}", h.valueHandler)
@@ -218,7 +221,8 @@ func (h *Handlers) rootHandler(res http.ResponseWriter, req *http.Request) {
                 <li><code>POST /update/{type}/{name}/{value}- Update metric</code> </li>
                 <li><code>GET /value/{type}/{name} - Get metric value</code></li>
 				<li><code>POST /update - Update metric (JSON)</code></li>
-                <li><code>GET /value - Get metric value (JSON)</code></li>
+				<li><code>POST /updates - Updates metric batch (JSON)</code></li>
+                <li><code>POST /value - Get metric value (JSON)</code></li>
 				<li><code>GET /ping - Ping DB</code></li>
 				<li><code>GET / - This dashboard</code></li>
             </ul>

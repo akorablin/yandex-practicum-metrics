@@ -16,7 +16,7 @@ func (w gzipResponseWriter) Write(b []byte) (int, error) {
 	return w.writer.Write(b)
 }
 
-func GzipMiddleware(next http.Handler) http.Handler {
+func Gzip(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Распаковка gzip тела запроса, если есть
 		if r.Header.Get("Content-Encoding") == "gzip" {

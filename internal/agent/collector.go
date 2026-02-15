@@ -1,8 +1,13 @@
 package agent
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"runtime"
+	"time"
+
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 type Collector struct {
@@ -17,7 +22,7 @@ func NewCollector() *Collector {
 	}
 }
 
-func (c *Collector) UpdateMetrics() {
+func (c *Collector) UpdateDefaultMetrics() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
@@ -55,6 +60,23 @@ func (c *Collector) UpdateMetrics() {
 
 	// Случайное значение
 	c.gauge["RandomValue"] = rand.Float64()
+}
+
+func (c *Collector) UpdateAdditionalMetrics() {
+	// Оперативная память
+	if vmStat, err := mem.VirtualMemory(); err == nil {
+		c.gauge["TotalMemory"] = float64(vmStat.Total)
+		c.gauge["FreeMemory"] = float64(vmStat.Free)
+	}
+
+	// CPU
+	if cpuPercent, err := cpu.Percent(500*time.Millisecond, true); err == nil {
+		gaugeName := ""
+		for i, usage := range cpuPercent {
+			gaugeName = fmt.Sprintf("CPUutilization%d", i+1)
+			c.gauge[gaugeName] = float64(usage)
+		}
+	}
 }
 
 func (c *Collector) GetGauges() map[string]float64 {

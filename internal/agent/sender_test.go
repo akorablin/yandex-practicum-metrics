@@ -7,10 +7,17 @@ import (
 	"testing"
 
 	"github.com/akorablin/yandex-practicum-metrics/internal/agent"
+	"github.com/akorablin/yandex-practicum-metrics/internal/config"
 )
 
 func TestNewSender(t *testing.T) {
-	sender := agent.NewSender("http://localhost:8080")
+	cfg := &config.AgentConfig{
+		Address:        "http://localhost:8080",
+		PollInterval:   0,
+		ReportInterval: 0,
+		HashKey:        "",
+	}
+	sender := agent.NewSender(cfg)
 
 	if sender == nil {
 		t.Fatal("NewSender() returned nil")
@@ -41,7 +48,13 @@ func TestSendGauge(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := agent.NewSender(server.URL)
+	cfg := &config.AgentConfig{
+		Address:        server.URL,
+		PollInterval:   0,
+		ReportInterval: 0,
+		HashKey:        "",
+	}
+	sender := agent.NewSender(cfg)
 	err := sender.SendGauge("testGauge", 3.15)
 
 	if err != nil {
@@ -61,7 +74,13 @@ func TestSendCounter(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := agent.NewSender(server.URL)
+	cfg := &config.AgentConfig{
+		Address:        server.URL,
+		PollInterval:   0,
+		ReportInterval: 0,
+		HashKey:        "",
+	}
+	sender := agent.NewSender(cfg)
 	err := sender.SendCounter("testCounter", 42)
 
 	if err != nil {
@@ -86,7 +105,13 @@ func TestSendAllMetrics(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := agent.NewSender(server.URL)
+	cfg := &config.AgentConfig{
+		Address:        server.URL,
+		PollInterval:   0,
+		ReportInterval: 0,
+		HashKey:        "",
+	}
+	sender := agent.NewSender(cfg)
 
 	// Тестовые данные
 	gauges := map[string]float64{

@@ -20,7 +20,7 @@ func TestNewCollector(t *testing.T) {
 	}
 }
 
-func TestUpdateMetrics(t *testing.T) {
+func TestUpdateDefaultMetrics(t *testing.T) {
 	collector := NewCollector()
 
 	// Проверяем начальное состояние
@@ -36,7 +36,7 @@ func TestUpdateMetrics(t *testing.T) {
 	}
 
 	// Обновляем метрики
-	collector.UpdateMetrics()
+	collector.UpdateDefaultMetrics()
 
 	gauge = collector.GetGauges()
 	counter = collector.GetCounters()

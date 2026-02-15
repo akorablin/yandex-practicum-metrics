@@ -33,40 +33,61 @@ func run() error {
 	// Создаем "отправщик" метрик
 	serverURL := cfg.Address
 	if !strings.Contains(serverURL, "http://") && !strings.Contains(serverURL, "https://") {
-		serverURL = "http://" + serverURL
+		cfg.Address = "http://" + serverURL
 	}
-	sender := agent.NewSender(serverURL)
+	sender := agent.NewSender(cfg)
 
 	// Запускаем агент
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	var wg sync.WaitGroup
 
-	// Рутина "сборщика" метрик
+	// Горутина "сборщика" базовых метрик
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		log.Printf("Started metrics collection with interval: %v", cfg.PollInterval)
+		log.Printf("Started collection of default metrics with interval: %v", cfg.PollInterval)
 		ticker := time.NewTicker(cfg.PollInterval)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Stopping metrics collection...")
+				log.Println("Stopping collection of default metrics ...")
 				return
 			case <-ticker.C:
-				collector.UpdateMetrics()
-				gaugeCount, counterCount := collector.GetMetricsCount()
-				log.Printf("Collected metrics: %d gauges, %d counters", gaugeCount, counterCount)
+				collector.UpdateDefaultMetrics()
+				log.Printf("Collected default metrics")
+			}
+		}
+	}()
+
+	// Горутина "сборщика" дополнительных метрик
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Printf("Started collection of additional metrics with interval: %v", cfg.PollInterval)
+		ticker := time.NewTicker(cfg.PollInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Stopping collection of additional metrics ...")
+				return
+			case <-ticker.C:
+				collector.UpdateAdditionalMetrics()
+				log.Printf("Collected additional metrics")
 			}
 		}
 	}()
 
 	// Рутина "отправщика" метрик
 	wg.Add(1)
+	semaphore := agent.NewSemaphore(cfg.RateLimit)
 	go func() {
 		defer wg.Done()
+
 		log.Printf("Started metrics reporting with interval: %v", cfg.ReportInterval)
 		ticker := time.NewTicker(cfg.ReportInterval)
 		defer ticker.Stop()
@@ -77,6 +98,8 @@ func run() error {
 				log.Printf("Stopping metrics reporting...")
 				return
 			case <-ticker.C:
+				semaphore.Acquire()
+
 				gauges := collector.GetGauges()
 				counters := collector.GetCounters()
 				err := sender.SendAllMetricsJSON(ctx, gauges, counters)
@@ -85,6 +108,8 @@ func run() error {
 				} else {
 					log.Printf("Successfully sent all metrics")
 				}
+
+				semaphore.Release()
 			}
 		}
 	}()
