@@ -15,12 +15,15 @@ type ServerConfig struct {
 	FileStoragePath string
 	Restore         bool
 	DataBaseDSN     string
+	HashKey         string
 }
 
 type AgentConfig struct {
 	Address        string
 	PollInterval   time.Duration
 	ReportInterval time.Duration
+	HashKey        string
+	RateLimit      int
 }
 
 func getEnvOrDefaultString(envVar string, defaultValue string) string {
@@ -66,6 +69,7 @@ func GetServerConfig() (*ServerConfig, error) {
 		FileStoragePath: getEnvOrDefaultString("FILE_STORAGE_PATH", "tmp/metrics.json"),
 		Restore:         getEnvOrDefaultBool("RESTORE", true),
 		DataBaseDSN:     getEnvOrDefaultString("DATABASE_DSN", ""),
+		HashKey:         getEnvOrDefaultString("KEY", ""),
 	}
 
 	// Настройки из командной строки
@@ -75,6 +79,7 @@ func GetServerConfig() (*ServerConfig, error) {
 	fileStoragePath := flag.String("f", cfg.FileStoragePath, "file storage path")
 	restore := flag.Bool("r", cfg.Restore, "restore")
 	dataBaseDSN := flag.String("d", cfg.DataBaseDSN, "database dsn")
+	hashKey := flag.String("k", cfg.HashKey, "hash key")
 	flag.Parse()
 
 	// Валидация командной строки
@@ -92,6 +97,7 @@ func GetServerConfig() (*ServerConfig, error) {
 	cfg.FileStoragePath = *fileStoragePath
 	cfg.Restore = *restore
 	cfg.DataBaseDSN = *dataBaseDSN
+	cfg.HashKey = *hashKey
 
 	// Отображение настроек
 	fmt.Println("Server Address:", cfg.Address)
@@ -100,6 +106,8 @@ func GetServerConfig() (*ServerConfig, error) {
 	fmt.Println("File Storage Path:", cfg.FileStoragePath)
 	fmt.Println("Restore:", cfg.Restore)
 	fmt.Println("DataBaseDSN:", cfg.DataBaseDSN)
+	fmt.Println("HashKey:", cfg.HashKey)
+	fmt.Println("---------------")
 
 	return cfg, nil
 }
@@ -110,13 +118,16 @@ func GetAgentConfig() (*AgentConfig, error) {
 		Address:        getEnvOrDefaultString("ADDRESS", "localhost:8080"),
 		PollInterval:   getEnvOrDefaultTimeDuration("POLL_INTERVAL", 2*time.Second),
 		ReportInterval: getEnvOrDefaultTimeDuration("REPORT_INTERVAL", 10*time.Second),
+		HashKey:        getEnvOrDefaultString("KEY", ""),
+		RateLimit:      getEnvOrDefaultInt("RATE_LIMIT", 1),
 	}
 
 	// Настройки из командной строки
-	var pollInterval, reportInterval int
-	flag.StringVar(&cfg.Address, "a", cfg.Address, "server address")
-	flag.IntVar(&pollInterval, "p", int(cfg.PollInterval.Seconds()), "poll interval")
-	flag.IntVar(&reportInterval, "r", int(cfg.ReportInterval.Seconds()), "report interval")
+	serverAddress := flag.String("a", cfg.Address, "server address")
+	pollInterval := flag.Int("p", int(cfg.PollInterval.Seconds()), "poll interval")
+	reportInterval := flag.Int("r", int(cfg.ReportInterval.Seconds()), "report interval")
+	hashKey := flag.String("k", cfg.HashKey, "hash key")
+	rateLimit := flag.Int("l", cfg.RateLimit, "rate limit")
 	flag.Parse()
 
 	// Валидация командной строки
@@ -126,23 +137,33 @@ func GetAgentConfig() (*AgentConfig, error) {
 		flag.PrintDefaults()
 		return nil, fmt.Errorf("unknown arguments provided")
 	}
-	if pollInterval <= 0 {
-		fmt.Fprintf(os.Stderr, "Error: poll interval must be positive, got %d\n", pollInterval)
+	if *pollInterval <= 0 {
+		fmt.Fprintf(os.Stderr, "Error: poll interval must be positive, got %d\n", *pollInterval)
 		return nil, fmt.Errorf("incorrect pollInterval")
 	}
-	if reportInterval <= 0 {
-		fmt.Fprintf(os.Stderr, "Error: report interval must be positive, got %d\n", reportInterval)
+	if *reportInterval <= 0 {
+		fmt.Fprintf(os.Stderr, "Error: report interval must be positive, got %d\n", *reportInterval)
 		return nil, fmt.Errorf("incorrect reportInterval")
+	}
+	if *rateLimit <= 0 {
+		fmt.Fprintf(os.Stderr, "Error: rate limit must be positive, got %d\n", *rateLimit)
+		return nil, fmt.Errorf("incorrect rateLimit")
 	}
 
 	// Сохраняем настройки
-	cfg.PollInterval = time.Duration(pollInterval) * time.Second
-	cfg.ReportInterval = time.Duration(reportInterval) * time.Second
+	cfg.Address = *serverAddress
+	cfg.PollInterval = time.Duration(*pollInterval) * time.Second
+	cfg.ReportInterval = time.Duration(*reportInterval) * time.Second
+	cfg.HashKey = *hashKey
+	cfg.RateLimit = *rateLimit
 
 	// Отображение настроек
 	fmt.Println("Server Address:", cfg.Address)
 	fmt.Println("Poll Level:", cfg.PollInterval)
 	fmt.Println("Report Interval:", cfg.ReportInterval)
+	fmt.Println("HashKey:", cfg.HashKey)
+	fmt.Println("RateLimit:", cfg.RateLimit)
+	fmt.Println("---------------")
 
 	return cfg, nil
 }
