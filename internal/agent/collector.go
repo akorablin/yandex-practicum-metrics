@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -13,6 +14,7 @@ import (
 type Collector struct {
 	gauge   map[string]float64
 	counter map[string]int64
+	mu      sync.RWMutex
 }
 
 func NewCollector() *Collector {
@@ -23,6 +25,9 @@ func NewCollector() *Collector {
 }
 
 func (c *Collector) UpdateDefaultMetrics() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
@@ -63,6 +68,9 @@ func (c *Collector) UpdateDefaultMetrics() {
 }
 
 func (c *Collector) UpdateAdditionalMetrics() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Оперативная память
 	if vmStat, err := mem.VirtualMemory(); err == nil {
 		c.gauge["TotalMemory"] = float64(vmStat.Total)
@@ -80,6 +88,9 @@ func (c *Collector) UpdateAdditionalMetrics() {
 }
 
 func (c *Collector) GetGauges() map[string]float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	result := make(map[string]float64)
 	for k, v := range c.gauge {
 		result[k] = float64(v)
@@ -88,6 +99,9 @@ func (c *Collector) GetGauges() map[string]float64 {
 }
 
 func (c *Collector) GetCounters() map[string]int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	result := make(map[string]int64)
 	for k, v := range c.counter {
 		result[k] = v
@@ -96,5 +110,8 @@ func (c *Collector) GetCounters() map[string]int64 {
 }
 
 func (c *Collector) GetMetricsCount() (int, int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	return len(c.gauge), len(c.counter)
 }
